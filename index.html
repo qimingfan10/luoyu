@@ -13,6 +13,11 @@
 	<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 	<link rel="stylesheet" href="./static/css/style.css">
 	<link rel="stylesheet" href="./static/css/root.css">
+	<style>
+		#user-input::placeholder {
+			color: white;
+		}
+	</style>
 
 </head>
 
@@ -235,14 +240,14 @@
 				</div>
 
 				<div class="title">
-					<svg t="1712222222222" class="icon" viewBox="0 0 1024 1024" version="1.1"
-						xmlns="http://www.w3.org/2000/svg" p-id="1234">
-						<path
+					<svg t="1712222222222" class="icon" viewBox="0 0 1024 1024" version="1.1" xmlns="http://www.w3.org/2000/svg"
+						p-id="1234">
+						<path fill="#ffffff"
 							d="M512 64C264.576 64 64 264.576 64 512s200.576 448 448 448 448-200.576 448-448S759.424 64 512 64z m0 832a384 384 0 1 1 0-768 384 384 0 0 1 0 768z"
-							fill="#333333" p-id="1235"></path>
-						<path
+							p-id="1235"></path>
+						<path fill="#ffffff"
 							d="M701.568 497.216H526.272V321.92a32 32 0 1 0-64 0v175.296H322.816a32 32 0 1 0 0 64h139.456v176.704a32 32 0 1 0 64 0V561.216h175.296a32 32 0 1 0 0-64z"
-							fill="#333333" p-id="1236"></path>
+							p-id="1236"></path>
 					</svg>
 					Deepseek
 				</div>
@@ -252,7 +257,7 @@
 				</div>
 				<div>
 					<input type="text" id="user-input" placeholder="输入你的消息..."
-						style="width: 65%; padding: 8px; margin-right: 5px; border-radius: 5px; background-color: transparent; box-shadow: inset 2px 2px 5px #e0e0e0;">
+						style="width: 65%; padding: 8px; margin-right: 5px; border-radius: 5px; background-color: transparent; box-shadow: inset 2px 2px 5px #e0e0e0; color: white;">
 					<button id="deep-thought-button"
 						style="padding: 8px; margin-right: 5px; border: none; background: none; cursor: pointer;">
 						<img id="deep-thought-icon" src="./static/img/sdsk.svg"
@@ -329,7 +334,7 @@
 			deepThoughtIcon.src = './static/img/sdsk.svg'; // 切换回 sdsk.svg
 			deepThoughtIcon.title = '开启深度思考模式';
 			deepThoughtIcon.style.width = '120px'; // 设置宽度
-			deepThoughtIcon.style.height = '45px'; // 设置高度
+			deepThoughtIcon.style.height = '40px'; // 设置高度
 		}
 		messages[0].content = systemMessageContent; // 更新系统消息
 	}
