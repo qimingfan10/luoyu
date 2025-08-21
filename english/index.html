@@ -1,0 +1,738 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>《单词疯人院》- 风趣记忆大师</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=ZCOOL+XiaoWei&family=Noto+Sans+SC:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #1a1a1a;
+            color: #e0e0e0;
+        }
+        .font-brand {
+            font-family: 'ZCOOL XiaoWei', serif;
+        }
+        .ai-bubble {
+            background-color: #2c2c2c;
+            border-left: 4px solid #8A2BE2;
+            animation: fadeIn 0.5s ease-in-out;
+        }
+        .user-interaction {
+            background-color: #252525;
+            border: 1px solid #444;
+            min-height: 150px;
+            animation: slideInUp 0.5s ease-in-out;
+        }
+        .option-btn {
+            transition: all 0.2s ease-in-out;
+        }
+        .option-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.3);
+        }
+        .option-btn.correct {
+            background-color: #28a745;
+            border-color: #28a745;
+            color: white;
+        }
+        .option-btn.incorrect {
+            background-color: #dc3545;
+            border-color: #dc3545;
+            color: white;
+        }
+        .feedback {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        #next-btn {
+            background-color: #8A2BE2;
+            transition: background-color 0.3s;
+        }
+        #next-btn:hover {
+            background-color: #9932CC;
+        }
+        #next-btn:disabled {
+            background-color: #555;
+            cursor: not-allowed;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+        @keyframes slideInUp {
+            from { transform: translateY(20px); opacity: 0; }
+            to { transform: translateY(0); opacity: 1; }
+        }
+        .loader {
+            border: 4px solid #f3f3f3;
+            border-radius: 50%;
+            border-top: 4px solid #8A2BE2;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .gemini-badge {
+            background: linear-gradient(45deg, #4285f4, #34a853, #fbbc05, #ea4335);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+            font-weight: bold;
+        }
+        .step-indicator {
+            background: linear-gradient(45deg, #8A2BE2, #9932CC);
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        .word-art {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            border: 2px solid #8A2BE2;
+            border-radius: 8px;
+            padding: 20px;
+            white-space: pre-line;
+            text-align: center;
+            line-height: 1.2;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen p-4">
+    <div id="app-container" class="w-full max-w-4xl mx-auto bg-[#1e1e1e] rounded-2xl shadow-2xl p-6 md:p-8 space-y-6">
+        <header class="text-center">
+            <h1 class="text-3xl md:text-4xl font-brand text-white">《单词疯人院》</h1>
+            <p class="text-purple-300">能让你笑出腹肌的英语单词记忆大师</p>
+            <p class="text-sm text-gray-400 mt-2">Powered by <span class="gemini-badge">Gemini AI</span></p>
+            <div id="step-indicator" class="mt-4 hidden">
+                <span class="step-indicator">准备开始</span>
+            </div>
+        </header>
+        <main id="game-area" class="space-y-4">
+            <div id="ai-area" class="ai-bubble p-5 rounded-lg">
+                <p id="ai-text" class="text-lg leading-relaxed"></p>
+            </div>
+            <div id="interaction-area" class="user-interaction p-5 rounded-lg flex flex-col justify-center">
+                <!-- Interaction content will be injected here -->
+            </div>
+            <div id="feedback-area" class="p-4 rounded-lg text-center hidden">
+                <p id="feedback-text"></p>
+            </div>
+        </main>
+        <footer class="text-center">
+            <button id="next-btn" class="text-white font-bold py-3 px-8 rounded-full shadow-lg w-full md:w-auto">
+                开始冒险
+            </button>
+        </footer>
+    </div>
+
+    <script>
+        // Gemini API 配置
+        const GEMINI_API_KEY = "AIzaSyCltQhZuIS3AdOMaRdWnUQbZ2wFfLxeID4";
+        const GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent";
+
+        // 教学步骤名称
+        const STEP_NAMES = [
+            "欢迎登场",
+            "核心速览", 
+            "外形联想法",
+            "语境放大镜",
+            "日常联想活剧场",
+            "词源侦探局",
+            "双胞胎辨析室",
+            "考研直通车",
+            "高分技巧点拨",
+            "字母变形记",
+            "课后挑战"
+        ];
+
+        // 游戏状态
+        let state = {
+            currentWord: '',
+            currentStep: 0,
+            stepContent: [],
+            userInput: null,
+            answered: false,
+            isGenerating: false,
+            waitingForUser: false
+        };
+
+        const aiTextEl = document.getElementById('ai-text');
+        const interactionAreaEl = document.getElementById('interaction-area');
+        const feedbackAreaEl = document.getElementById('feedback-area');
+        const feedbackTextEl = document.getElementById('feedback-text');
+        const nextBtn = document.getElementById('next-btn');
+        const stepIndicatorEl = document.getElementById('step-indicator');
+
+        // 调用 Gemini API
+        async function callGeminiAPI(prompt, systemPrompt = "") {
+            try {
+                const requestBody = {
+                    contents: [
+                        {
+                            parts: [
+                                {
+                                    text: systemPrompt ? `${systemPrompt}\n\n${prompt}` : prompt
+                                }
+                            ]
+                        }
+                    ],
+                    generationConfig: {
+                        temperature: 0.8,
+                        topK: 40,
+                        topP: 0.95,
+                        maxOutputTokens: 3000,
+                    }
+                };
+
+                const response = await fetch(`${GEMINI_API_URL}?key=${GEMINI_API_KEY}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Gemini API request failed: ${response.status}`);
+                }
+
+                const data = await response.json();
+                
+                if (data.candidates && data.candidates[0] && data.candidates[0].content) {
+                    return data.candidates[0].content.parts[0].text;
+                } else {
+                    throw new Error("Invalid response structure from Gemini API");
+                }
+            } catch (error) {
+                console.error('Gemini API call failed:', error);
+                throw error;
+            }
+        }
+
+        // 生成完整的教学内容
+        async function generateTeachingContent(word) {
+            const systemPrompt = `角色定位：
+你是一位经验极其丰富、教学风格独树一帜的英语教师。你的个人品牌是"怪诞、风趣但高效"。你的首要目标不是枯燥地灌输，而是通过各种夸张、幽默、甚至有点荒诞的手段，让用户在欢笑中把英语单词刻进DNA里。你深信，学习的过程本该是一场充满乐趣的冒险。
+
+请为英语单词"${word}"生成完整的教学内容，严格按照以下9个步骤：
+
+1. 核心速览 (The Gist): 用一两句最精炼、最地道的话说清楚单词的核心含义和基本用法。
+
+2. 外形联想法 (Look & Remember): 创造性地将单词的字母形状、排列组合与其含义进行天马行空的联想。越离奇越好记。
+
+3. 语境放大镜 (Usage in Context): 探究这个单词在真实世界里的"社交圈"和"行为习惯"，包括固定搭配、语气色彩、场景选择。
+
+4. 日常联想活剧场 (Real-Life Theatre): 创造一个极其生活化的场景，让单词的含义在场景中自然浮现，并与中文成语进行关联。
+
+5. 词源侦探局 (Etymology Detective): 聚焦最实用、最高频的词根和词缀，说明它们如何搭建出当前单词。
+
+6. "双胞胎"辨析室 (Similar Word Clinic): 区分当前单词和它的形近/义近词，为每个易混淆词都创造独立的记忆点。
+
+7. 考研直通车 (Exam Express): 说明该单词在考研英语中的重要性和常见考点。
+
+8. 高分技巧点拨 (Pro-Tips): 融入考研英语的解题技巧。
+
+9. 课后挑战 (Challenge): 抛出一个有趣的思考题或小挑战。
+
+请用风趣幽默、略带夸张的语调，保持中文回复。每个步骤都要详细且有趣。`;
+
+            const prompt = `请为单词"${word}"生成完整的9步教学内容。`;
+
+            try {
+                const response = await callGeminiAPI(prompt, systemPrompt);
+                return parseTeachingContent(response);
+            } catch (error) {
+                console.error('Failed to generate teaching content:', error);
+                return generateFallbackContent(word);
+            }
+        }
+
+        // 解析教学内容
+        function parseTeachingContent(content) {
+            const steps = [];
+            const lines = content.split('\n');
+            let currentStep = null;
+            let currentContent = [];
+
+            for (let line of lines) {
+                line = line.trim();
+                if (!line) continue;
+
+                // 检查是否是新步骤的开始
+                const stepMatch = line.match(/^(\d+)\.\s*(.+?)[:：]\s*(.*)/) || 
+                                 line.match(/^[一二三四五六七八九]\s*[、.]\s*(.+?)[:：]\s*(.*)/);
+                
+                if (stepMatch) {
+                    // 保存上一步骤
+                    if (currentStep) {
+                        steps.push({
+                            title: currentStep,
+                            content: currentContent.join('\n').trim()
+                        });
+                    }
+                    
+                    // 开始新步骤
+                    currentStep = stepMatch[2] || stepMatch[1];
+                    currentContent = [stepMatch[3] || stepMatch[2] || ''];
+                } else if (currentStep) {
+                    currentContent.push(line);
+                }
+            }
+
+            // 保存最后一个步骤
+            if (currentStep) {
+                steps.push({
+                    title: currentStep,
+                    content: currentContent.join('\n').trim()
+                });
+            }
+
+            // 确保至少有9个步骤
+            while (steps.length < 9) {
+                steps.push({
+                    title: STEP_NAMES[steps.length] || '继续学习',
+                    content: `让我们继续深入学习"${state.currentWord}"这个单词！`
+                });
+            }
+
+            return steps;
+        }
+
+        // 备用内容生成
+        function generateFallbackContent(word) {
+            // 通用的教学内容模板，适用于任何单词
+            return [
+                {
+                    title: "核心速览",
+                    content: `🎭 哈喽！欢迎来到"${word}"的奇幻之旅！我是能让你笑出腹肌的英语单词记忆大师！<br><br>📚 "${word}"这个单词即将被我们彻底"解剖"！我会用最有趣的方式帮你记住它的含义、用法和所有重要细节。<br><br>🎯 准备好接受这场充满乐趣的学习冒险了吗？让我们开始吧！`
+                },
+                {
+                    title: "外形联想法",
+                    content: `🔍 让我们用"显微镜"来观察"${word}"的每一个字母！<br><br>👀 仔细看看这个单词的形状：<br>• 总共有 ${word.length} 个字母<br>• 以字母 "${word[0].toUpperCase()}" 开头<br>• 以字母 "${word[word.length-1].toUpperCase()}" 结尾<br><br>🎨 想象一下，这些字母就像积木一样拼在一起，形成了一个独特的"建筑"！每次看到这个形状，你就能想起它的含义。<br><br>💡 记忆小贴士：试着用手指在空中"写"出这个单词，让肌肉记忆帮助你！`
+                },
+                {
+                    title: "语境放大镜",
+                    content: `🕵️ 现在我们要像侦探一样，探究"${word}"在真实世界里的"社交圈"！<br><br>🌍 这个单词通常出现在：<br>• 📖 书面语言中（正式文档、学术文章）<br>• 💬 日常对话中（朋友聊天、家庭交流）<br>• 📺 媒体报道中（新闻、电视节目）<br><br>🎭 语气色彩：<br>• 可以是正式的，也可以是非正式的<br>• 通常带有积极或中性的感情色彩<br><br>🔗 常见搭配模式：记住单词不是孤立存在的，它们喜欢和特定的词汇"做朋友"！`
+                },
+                {
+                    title: "日常联想活剧场",
+                    content: `🎬 让我们把"${word}"从书本里拽出来，扔进你的日常生活里！<br><br>🏠 想象这样一个场景：<br>你正在和朋友聊天，突然需要用到"${word}"这个词。你会在什么情况下说出它？<br><br>🎭 角色扮演时间：<br>• 👨‍🏫 如果你是老师，你会怎么用这个词？<br>• 👨‍💼 如果你在工作中，这个词会出现在哪里？<br>• 👨‍👩‍👧‍👦 在家庭聚会上，你能用它造个有趣的句子吗？<br><br>💭 生活联想：想想你的日常生活中，哪些场景最容易让你想起这个单词？把它们连接起来！`
+                },
+                {
+                    title: "词源侦探局",
+                    content: `🔍 让我们当一回语言考古学家，挖掘"${word}"的前世今生！<br><br>🏛️ 词汇家族树：<br>• 这个单词可能来自古老的语言根源<br>• 它在历史长河中经历了怎样的变化？<br>• 有哪些"亲戚"单词和它长得很像？<br><br>🧩 构词规律：<br>• 前缀：单词开头的部分有什么特殊含义吗？<br>• 词根：核心部分承载着什么信息？<br>• 后缀：结尾部分告诉我们什么？<br><br>🌳 词汇扩展：掌握了"${word}"，你还能轻松学会它的"兄弟姐妹"们！`
+                },
+                {
+                    title: "双胞胎辨析室",
+                    content: `👯 现在我们要分清"${word}"和它的那些"双胞胎"兄弟姐妹！<br><br>🔍 形近词警报：<br>• 有哪些单词和"${word}"长得很像但意思不同？<br>• 拼写上只差一两个字母的"陷阱"单词<br>• 如何快速区分它们？<br><br>🎭 义近词辨析：<br>• 意思相近但用法不同的单词<br>• 在什么情况下用"${word}"，什么时候用其他词？<br>• 语气和正式程度的差别<br><br>💡 记忆绝招：给每个易混词都编一个小故事，让它们在你脑海中有独特的"身份证"！`
+                },
+                {
+                    title: "考研直通车",
+                    content: `🚄 重点来了！"${word}"在考研英语中可是个狠角色！<br><br>📊 考试频率：<br>• 这个单词在历年真题中的出现频率<br>• 通常出现在哪种题型中（阅读理解、完形填空、翻译等）<br>• 考查的重点是什么（词义、用法、搭配）<br><br>🎯 考点预测：<br>• 最可能考查的含义和用法<br>• 常见的出题陷阱和干扰项<br>• 如何快速识别正确答案<br><br>📝 应试技巧：掌握了"${word}"的这些考点，你就能在考场上游刃有余！`
+                },
+                {
+                    title: "高分技巧点拨",
+                    content: `🚀 掌握了"${word}"，你的考研英语分数就要起飞了！<br><br>✨ 高分使用技巧：<br>• 在写作中如何优雅地使用这个词<br>• 替换常见词汇，让你的表达更加丰富<br>• 避免使用错误，展现你的语言功底<br><br>🎨 表达升级：<br>• 从基础用法到高级用法的进阶<br>• 如何在不同语境中灵活运用<br>• 让考官眼前一亮的地道表达<br><br>🏆 记忆巩固：现在你不仅知道怎么用，还知道怎么用得更好！`
+                },
+                {
+                    title: "课后挑战",
+                    content: `🎮 最后一个挑战：你能想出一个包含"${word}"的有趣句子吗？<br><br>🎯 挑战任务：<br>• 创造一个生动有趣的句子<br>• 展现你对这个单词的深度理解<br>• 让这个句子成为你记忆的"锚点"<br><br>💡 创意提示：<br>• 可以是幽默的、感人的、或者富有想象力的<br>• 结合你的个人经历或兴趣爱好<br>• 让这个句子独一无二，只属于你<br><br>🌟 记住：最好的学习就是能够创造性地使用所学的知识！`
+                }
+            ];
+        }
+
+        // 更新步骤指示器
+        function updateStepIndicator() {
+            if (state.currentStep < STEP_NAMES.length) {
+                stepIndicatorEl.querySelector('.step-indicator').textContent = 
+                    `第${state.currentStep + 1}步：${STEP_NAMES[state.currentStep]}`;
+                stepIndicatorEl.classList.remove('hidden');
+            } else {
+                stepIndicatorEl.classList.add('hidden');
+            }
+        }
+
+        // 渲染当前步骤
+        function renderCurrentStep() {
+            if (!state.stepContent || state.currentStep >= state.stepContent.length) {
+                renderEndScreen();
+                return;
+            }
+
+            const step = state.stepContent[state.currentStep];
+            updateStepIndicator();
+            
+            aiTextEl.parentElement.style.animation = 'none';
+            aiTextEl.parentElement.offsetHeight;
+            aiTextEl.parentElement.style.animation = null;
+            
+            aiTextEl.innerHTML = step.content.replace(/\n/g, '<br>');
+            interactionAreaEl.innerHTML = '';
+            feedbackAreaEl.classList.add('hidden');
+            state.answered = false;
+            state.waitingForUser = true;
+
+            // 特殊步骤的交互
+            if (state.currentStep === 8) { // 课后挑战
+                interactionAreaEl.innerHTML = `
+                    <div class="space-y-4">
+                        <textarea id="challenge-input" class="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:ring-2 focus:ring-purple-500 focus:outline-none" rows="3" placeholder="在这里写下你的想法..."></textarea>
+                        <p class="text-center text-gray-400 text-sm">💡 发挥你的创意，没有标准答案！</p>
+                    </div>
+                `;
+                
+                document.getElementById('challenge-input').addEventListener('input', (e) => {
+                    if (e.target.value.trim().length > 0) {
+                        state.answered = true;
+                        state.userInput = e.target.value.trim();
+                        nextBtn.disabled = false;
+                        nextBtn.textContent = '生成专属艺术品';
+                    } else {
+                        nextBtn.disabled = true;
+                        nextBtn.textContent = '请输入你的想法';
+                    }
+                });
+                
+                nextBtn.disabled = true;
+                nextBtn.textContent = '请输入你的想法';
+            } else if (state.currentStep === 9) { // 字母变形记
+                renderWordArt();
+                return;
+            } else {
+                // 为每个步骤生成交互式问答
+                renderInteractiveQuestion();
+            }
+        }
+
+        // 渲染交互式问题
+        async function renderInteractiveQuestion() {
+            // 显示加载状态
+            interactionAreaEl.innerHTML = `
+                <div class="flex justify-center items-center h-32">
+                    <div class="loader"></div>
+                    <p class="ml-4 text-gray-400">AI老师正在为"${state.currentWord}"准备专属问题...</p>
+                </div>
+            `;
+            
+            try {
+                // 动态生成与单词和教学内容相关的问题
+                const questions = await generateInteractiveQuestion(state.currentStep);
+                
+                interactionAreaEl.innerHTML = `
+                    <div class="space-y-4">
+                        <div class="bg-purple-900/30 p-4 rounded-lg border border-purple-500/30">
+                            <h3 class="text-purple-300 font-bold mb-3">🤔 互动问答时间</h3>
+                            <p class="text-white mb-4">${questions.question}</p>
+                            <div class="space-y-2" id="options-container">
+                                ${questions.options.map((option, index) => `
+                                    <button class="option-btn w-full text-left p-3 bg-gray-700 hover:bg-gray-600 rounded-lg border border-gray-600 transition-all duration-200" data-index="${index}">
+                                        ${String.fromCharCode(65 + index)}. ${option}
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+                        <div class="text-center">
+                            <p class="text-gray-400 text-sm">💡 选择你认为正确的答案</p>
+                        </div>
+                    </div>
+                `;
+
+                // 添加选项点击事件
+                const optionBtns = interactionAreaEl.querySelectorAll('.option-btn');
+                optionBtns.forEach((btn, index) => {
+                    btn.addEventListener('click', () => {
+                        // 禁用所有按钮
+                        optionBtns.forEach(b => b.disabled = true);
+                        
+                        // 显示答案反馈
+                        if (index === questions.correctIndex) {
+                            btn.classList.add('correct');
+                            showFeedback(`🎉 回答正确！${questions.explanation}`, 'correct');
+                        } else {
+                            btn.classList.add('incorrect');
+                            optionBtns[questions.correctIndex].classList.add('correct');
+                            showFeedback(`❌ 答案不对哦！正确答案是 ${String.fromCharCode(65 + questions.correctIndex)}。${questions.explanation}`, 'incorrect');
+                        }
+                        
+                        state.answered = true;
+                        nextBtn.disabled = false;
+                        nextBtn.textContent = state.currentStep < 7 ? '继续下一步' : '接受挑战';
+                    });
+                });
+
+                nextBtn.disabled = true;
+                nextBtn.textContent = '请先回答问题';
+                
+            } catch (error) {
+                console.error('Failed to generate interactive question:', error);
+                // 使用备用问题
+                const fallbackQuestion = getFallbackQuestion(state.currentStep);
+                renderFallbackQuestion(fallbackQuestion);
+            }
+        }
+
+        // 动态生成与单词相关的交互问题
+        async function generateInteractiveQuestion(stepIndex) {
+            const word = state.currentWord;
+            const stepContent = state.stepContent[stepIndex];
+            const stepName = STEP_NAMES[stepIndex];
+            
+            const systemPrompt = `你是《单词疯人院》的AI老师，风趣幽默但专业。现在需要为"${word}"这个单词的"${stepName}"教学步骤设计一个交互问题。
+
+要求：
+1. 问题必须与"${word}"这个具体单词紧密相关
+2. 问题要基于刚才的教学内容，测试学生对该单词的理解
+3. 提供4个选项，其中1个正确，3个错误但有迷惑性
+4. 解释要风趣幽默，符合AI老师的风格
+5. 返回JSON格式：{"question": "问题", "options": ["选项A", "选项B", "选项C", "选项D"], "correctIndex": 正确答案索引(0-3), "explanation": "解释"}`;
+
+            const prompt = `基于以下教学内容，为单词"${word}"的"${stepName}"步骤设计一个交互问题：
+
+教学内容：
+${stepContent.content}
+
+请设计一个能测试学生对"${word}"这个单词在"${stepName}"方面理解的问题。问题要具体、有针对性，不要太泛泛而谈。`;
+
+            try {
+                const response = await callGeminiAPI(prompt, systemPrompt);
+                
+                // 尝试解析JSON
+                const cleanResponse = response.replace(/```json\n?|\n?```/g, '').trim();
+                const questionData = JSON.parse(cleanResponse);
+                
+                // 验证数据结构
+                if (questionData.question && questionData.options &&
+                    Array.isArray(questionData.options) && questionData.options.length === 4 &&
+                    typeof questionData.correctIndex === 'number' &&
+                    questionData.correctIndex >= 0 && questionData.correctIndex < 4 &&
+                    questionData.explanation) {
+                    return questionData;
+                } else {
+                    throw new Error('Invalid question data structure');
+                }
+                
+            } catch (error) {
+                console.error('Failed to parse AI generated question:', error);
+                throw error;
+            }
+        }
+
+        // 渲染字母变形记
+        async function renderWordArt() {
+            aiTextEl.innerHTML = `🎨 作为你成功通关的奖励，我将用魔法把"${state.currentWord}"这个单词本身，为你绘制一幅独一无二的艺术品！请收下你的战利品！`;
+            
+            interactionAreaEl.innerHTML = `<div class="flex justify-center items-center h-full"><div class="loader"></div><p class="ml-4">正在用AI魔法为您生成专属字母艺术品...</p></div>`;
+            nextBtn.disabled = true;
+
+            try {
+                // 生成字母艺术
+                const artPrompt = `为英语单词"${state.currentWord}"创作字母艺术，要求：
+1. 将单词的字母形状与其含义巧妙结合
+2. 用ASCII字符和特殊符号创作视觉效果
+3. 体现单词的核心含义
+4. 风格有趣且便于记忆
+5. 适合在网页上显示`;
+
+                const systemPrompt = "你是一位创意字母艺术家，擅长用文字和符号创作视觉艺术，帮助学生记忆英语单词。";
+                
+                const artContent = await callGeminiAPI(artPrompt, systemPrompt);
+                
+                // 生成图片URL
+                const word = state.currentWord;
+                const imagePrompt = `Calligram of the word "${word}" shaped as a visual representation of its meaning, where the letters form the main elements of the image`;
+                const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(imagePrompt)}?width=1024&height=1024&seed=100&model=flux&nologo=true`;
+                
+                interactionAreaEl.innerHTML = `
+                    <div class="text-center space-y-6">
+                        <div class="word-art">
+${artContent}
+                        </div>
+                        <div class="bg-gray-800 p-4 rounded-lg">
+                            <p class="text-purple-300 mb-2">🎨 AI生成的专属视觉艺术</p>
+                            <img src="${imageUrl}" alt="字母艺术：${word}" class="rounded-lg max-h-64 mx-auto" onerror="this.style.display='none'">
+                        </div>
+                        <p class="text-purple-300">✨ 由 <span class="gemini-badge">Gemini AI</span> 为"${word}"创作的专属记忆艺术品 ✨</p>
+                    </div>
+                `;
+                
+                showFeedback(`看！这就是AI为"${state.currentWord}"创作的专属记忆艺术品！把它存下来，每次看到它，你就会想起这个单词的所有知识点！`, 'correct');
+                
+            } catch (error) {
+                console.error('Word art generation failed:', error);
+                interactionAreaEl.innerHTML = `
+                    <div class="text-center space-y-4">
+                        <div class="word-art">
+    ╔═══════════════════════════════╗
+    ║        ${state.currentWord.toUpperCase()}                    ║
+    ║                               ║
+    ║    🎯 你的专属学习徽章         ║
+    ║                               ║
+    ║   恭喜掌握这个单词！          ║
+    ╚═══════════════════════════════╝
+                        </div>
+                        <p class="text-purple-300">✨ 你的专属学习纪念品 ✨</p>
+                    </div>
+                `;
+                showFeedback(`恭喜你完成了"${state.currentWord}"的完整学习之旅！`, 'correct');
+            } finally {
+                nextBtn.disabled = false;
+                nextBtn.textContent = '学习新单词';
+            }
+        }
+
+        // 渲染结束画面
+        function renderEndScreen() {
+            stepIndicatorEl.classList.add('hidden');
+            aiTextEl.innerHTML = `🎉 恭喜你！你已经彻底征服了"${state.currentWord}"这个单词！<br><br>从核心含义到外形联想，从语境搭配到考研技巧，你已经把它的每一个细节都刻进了DNA里！<br><br>准备好挑战下一个单词了吗？`;
+            
+            interactionAreaEl.innerHTML = `
+                <div class="text-center space-y-4">
+                    <div class="text-green-400 font-bold text-2xl">🏆 学习完成！</div>
+                    <div class="bg-gray-800 p-4 rounded-lg">
+                        <p class="text-purple-300">你已经掌握了"${state.currentWord}"的：</p>
+                        <ul class="text-left text-sm mt-2 space-y-1">
+                            <li>✅ 核心含义和用法</li>
+                            <li>✅ 外形记忆技巧</li>
+                            <li>✅ 语境搭配规律</li>
+                            <li>✅ 词源构成逻辑</li>
+                            <li>✅ 考研应试技巧</li>
+                        </ul>
+                    </div>
+                </div>
+            `;
+            
+            nextBtn.disabled = false;
+            nextBtn.textContent = '学习新单词';
+        }
+
+        // 显示反馈
+        function showFeedback(text, type) {
+            feedbackTextEl.innerHTML = text.replace(/\n/g, '<br>');
+            feedbackAreaEl.className = `p-4 rounded-lg text-center feedback ${type === 'correct' ? 'bg-green-900/50 text-green-300' : 'bg-red-900/50 text-red-300'}`;
+            feedbackAreaEl.classList.remove('hidden');
+        }
+
+        // 开始新单词学习
+        async function startWordLearning(word) {
+            if (state.isGenerating) return;
+            
+            state.isGenerating = true;
+            state.currentWord = word.toLowerCase().trim();
+            state.currentStep = 0;
+            state.waitingForUser = false;
+            
+            // 显示加载状态
+            aiTextEl.innerHTML = `🎭 哈喽！欢迎来到我的地盘！我是能让你笑出腹肌的英语单词记忆大师！<br><br>现在我要用"显微镜"、"哈哈镜"甚至"任意门"带你全方位解剖"${state.currentWord}"这个单词！<br><br>准备好接受这场充满乐趣的学习冒险了吗？`;
+            interactionAreaEl.innerHTML = `<div class="flex justify-center items-center h-full"><div class="loader"></div><p class="ml-4">AI记忆大师正在为"${state.currentWord}"准备专属教学方案...</p></div>`;
+            nextBtn.disabled = true;
+            
+            try {
+                // 生成教学内容
+                state.stepContent = await generateTeachingContent(state.currentWord);
+                state.isGenerating = false;
+                
+                // 开始第一步
+                state.currentStep = 0;
+                renderCurrentStep();
+                
+            } catch (error) {
+                console.error('Failed to start word learning:', error);
+                state.isGenerating = false;
+                
+                // 使用备用内容
+                state.stepContent = generateFallbackContent(state.currentWord);
+                state.currentStep = 0;
+                renderCurrentStep();
+            }
+        }
+
+        // 初始化游戏
+        function initGame() {
+            aiTextEl.innerHTML = '🎭 嗷吼！又一个勇敢的灵魂闯入了我的地盘！<br><br>我是能让你笑出腹肌，顺便把英语单词刻进DNA里的记忆大师！我深信，学习的过程本该是一场充满乐趣的冒险！<br><br>准备好接受哪个单词的"洗礼"了？把它像手榴弹一样砸向我吧！';
+            
+            interactionAreaEl.innerHTML = `
+                <div class="space-y-4">
+                    <input type="text" id="word-input" class="w-full bg-gray-700 text-white p-3 rounded-lg border border-gray-600 focus:ring-2 focus:ring-purple-500 focus:outline-none text-center text-lg" placeholder="输入任意英语单词，如：dream, love, challenge...">
+                    <div class="text-center space-y-2">
+                        <p class="text-purple-300 text-sm">🎯 接下来，我将从你想不到的角度</p>
+                        <p class="text-purple-300 text-sm">用"显微镜"、"哈哈镜"甚至"任意门"带你全方位解剖这个单词！</p>
+                    </div>
+                </div>
+            `;
+            
+            const wordInput = document.getElementById('word-input');
+            wordInput.addEventListener('input', (e) => {
+                const word = e.target.value.trim();
+                if (word.length > 0 && /^[a-zA-Z]+$/.test(word)) {
+                    nextBtn.disabled = false;
+                    nextBtn.textContent = `开始解剖 "${word}"`;
+                } else {
+                    nextBtn.disabled = true;
+                    nextBtn.textContent = '请输入有效的英语单词';
+                }
+            });
+            
+            wordInput.addEventListener('keypress', (e) => {
+                if (e.key === 'Enter' && !nextBtn.disabled) {
+                    nextBtn.click();
+                }
+            });
+            
+            nextBtn.disabled = true;
+            nextBtn.textContent = '请输入英语单词';
+            stepIndicatorEl.classList.add('hidden');
+            
+            // 重置状态
+            state
+
+= {
+                currentWord: '',
+                currentStep: 0,
+                stepContent: [],
+                answered: false,
+                userInput: '',
+                isGenerating: false,
+                waitingForUser: false
+            };
+        }
+
+        // 事件监听器
+        nextBtn.addEventListener('click', async () => {
+            if (state.isGenerating) return;
+            
+            if (!state.currentWord) {
+                // 开始新单词学习
+                const wordInput = document.getElementById('word-input');
+                if (wordInput && wordInput.value.trim()) {
+                    await startWordLearning(wordInput.value.trim());
+                }
+            } else if (state.currentStep >= state.stepContent.length) {
+                // 重新开始
+                initGame();
+            } else {
+                // 进入下一步
+                if (state.currentStep === 8 && state.answered) {
+                    // 课后挑战完成，进入字母变形记
+                    state.currentStep = 9;
+                    renderCurrentStep();
+                } else {
+                    state.currentStep++;
+                    renderCurrentStep();
+                }
+            }
+        });
+
+        // 初始化
+        initGame();
+    </script>
+</body>
+</html>
