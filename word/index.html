@@ -1,0 +1,1588 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 单词记忆道场</title>
+    <!-- 引入 Tailwind CSS 以实现快速样式布局 -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        'brand': ['Noto Serif SC', 'serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- 引入 Google Fonts 以优化字体显示 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
+    <style>
+        /* 自定义全局样式和动画 */
+        body { 
+            font-family: 'Inter', sans-serif; 
+            overflow: hidden; /* 防止背景模糊元素导致滚动条出现 */
+        }
+        /* 加载条动画 */
+        .animate-loading-bar { 
+            animation: loading-bar-animation 2s linear infinite; 
+        }
+        @keyframes loading-bar-animation { 
+            0% { transform: translateX(-100%); } 
+            100% { transform: translateX(100%); } 
+        }
+        /* 淡入动画 */
+        .animate-fade-in { 
+            animation: fade-in 0.5s ease-in-out; 
+        }
+        @keyframes fade-in { 
+            from { opacity: 0; transform: translateY(10px); } 
+            to { opacity: 1; transform: translateY(0); } 
+        }
+        /* 动画延迟，用于背景装饰元素 */
+        .animation-delay-4000 { 
+            animation-delay: 4s; 
+        }
+        /* 背景网格与彩色网状渐变 */
+        .bg-grid {
+            position: absolute;
+            inset: 0;
+            background-image:
+                linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+                linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+            background-size: 28px 28px;
+            mask-image: radial-gradient(ellipse at center, rgba(255,255,255,0.9), transparent 65%);
+            pointer-events: none;
+        }
+        .bg-mesh {
+            position: absolute;
+            inset: 0;
+            background:
+                radial-gradient(800px 800px at 10% 10%, rgba(99,102,241,0.20), transparent 60%),
+                radial-gradient(800px 800px at 90% 20%, rgba(168,85,247,0.16), transparent 60%),
+                radial-gradient(800px 800px at 20% 90%, rgba(56,189,248,0.14), transparent 60%);
+            filter: blur(0.5px);
+            pointer-events: none;
+        }
+        .glass-card {
+            background: rgba(15,23,42,0.65);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(148,163,184,0.22);
+            box-shadow: 0 10px 40px rgba(2,6,23,0.6);
+        }
+        .glass-input {
+            background: rgba(15,23,42,0.6);
+            border: 1px solid rgba(148,163,184,0.25);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+        }
+        .fancy-btn {
+            background-image: linear-gradient(135deg, #6366f1 0%, #8b5cf6 45%, #22d3ee 100%);
+            color: #fff;
+            box-shadow: 0 12px 24px rgba(99,102,241,0.25), 0 4px 8px rgba(2,6,23,0.4);
+        }
+        .fancy-btn:hover {
+            filter: saturate(1.15) brightness(1.05);
+        }
+        .fancy-btn:disabled {
+            opacity: 0.6;
+            filter: none;
+            box-shadow: none;
+        }
+        .progress-gradient {
+            background-image: linear-gradient(90deg, #6366f1, #8b5cf6, #22d3ee);
+        }
+        /* Ripple 点击涟漪效果 */
+        .ripple-container {
+            position: relative;
+            overflow: hidden;
+        }
+        .ripple {
+            position: absolute;
+            border-radius: 9999px;
+            transform: scale(0);
+            pointer-events: none;
+            background: rgba(255,255,255,0.35);
+            animation: ripple 600ms ease-out;
+        }
+        @keyframes ripple {
+            to {
+                transform: scale(8);
+                opacity: 0;
+            }
+        }
+        /* 优雅滚动条 */
+        .custom-scroll::-webkit-scrollbar {
+            width: 8px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background-color: rgba(148,163,184,0.35);
+            border-radius: 9999px;
+        }
+        .custom-scroll:hover::-webkit-scrollbar-thumb {
+            background-color: rgba(148,163,184,0.55);
+        }
+        /* 结果页彩带动画 */
+        .confetti-container {
+            position: absolute;
+            inset: 0;
+            overflow: hidden;
+            pointer-events: none;
+            z-index: 30;
+        }
+        .confetti {
+            position: absolute;
+            width: 8px;
+            height: 14px;
+            top: -16px;
+            opacity: 0.95;
+            background: var(--c);
+            left: var(--x);
+            transform: translateY(0) rotate(var(--r));
+            animation: confetti-fall var(--d) linear forwards;
+        }
+        @keyframes confetti-fall {
+            to {
+                transform: translateY(110vh) rotate(calc(var(--r) + 360deg));
+            }
+        }
+        /* 建议词条标签 */
+        .chip-button {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #e5e7eb;
+            padding: 6px 12px;
+            font-size: 0.875rem;
+            border-radius: 9999px;
+            transition: all 200ms ease;
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+        }
+        .chip-button:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(99,102,241,0.45);
+            color: #fff;
+        }
+        /* 品牌字体额外样式 */
+        .font-brand {
+            font-weight: 700;
+            letter-spacing: 0.05em;
+        }
+        /* 小标题专用字体 */
+        .font-subtitle {
+            font-family: 'Noto Serif SC', serif;
+            font-weight: 600;
+            letter-spacing: 0.02em;
+        }
+        /* 深度解析内容样式 */
+        .explanation-content strong {
+            display: inline-block;
+            font-weight: 700;
+            color: #ffffff;
+            background: rgba(99, 102, 241, 0.2);
+            padding: 0.125rem 0.25rem;
+            border-radius: 0.25rem;
+            margin: 0 0.125rem;
+        }
+        /* API选择器样式 */
+        .api-selector {
+            background: rgba(255,255,255,0.06);
+            border: 1px solid rgba(255,255,255,0.12);
+            color: #e5e7eb;
+        }
+        .api-selector:hover {
+            background: rgba(255,255,255,0.12);
+            border-color: rgba(99,102,241,0.45);
+            color: #fff;
+        }
+        .api-selector.active {
+            background: rgba(99,102,241,0.3);
+            border-color: rgba(99,102,241,0.8);
+            color: #fff;
+            box-shadow: 0 0 10px rgba(99,102,241,0.3);
+        }
+        /* 减少动态偏好处理 */
+        @media (prefers-reduced-motion: reduce) {
+            .animate-loading-bar, .animate-fade-in, .animate-pulse {
+                animation: none !important;
+            }
+        }
+    </style>
+</head>
+<body class="bg-slate-900">
+    <!-- 主应用容器 -->
+    <main id="app-container" class="min-h-screen w-full flex flex-col items-center justify-center p-4 relative">
+        <!-- 背景装饰元素 -->
+        <div class="bg-grid"></div>
+        <div class="bg-mesh"></div>
+        <div class="absolute top-0 left-0 -translate-x-1/3 -translate-y-1/3 w-96 h-96 bg-indigo-600/20 rounded-full blur-3xl animate-pulse"></div>
+        <div class="absolute bottom-0 right-0 translate-x-1/3 translate-y-1/3 w-96 h-96 bg-purple-600/20 rounded-full blur-3xl animate-pulse animation-delay-4000"></div>
+        
+        <!-- 动态内容将通过 JavaScript 注入到这里 -->
+        <div id="content-root" class="w-full max-w-3xl mx-auto z-10">
+            <!-- 初始加载欢迎页面 -->
+        </div>
+    </main>
+
+    <script type="module">
+        // --- 图标模块 ---
+        // 将 lucide-react 图标转换为返回 SVG 字符串的函数，以在原生 JS 中使用
+        const Icons = {
+            BookOpen: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>`,
+            Search: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>`,
+            Users: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>`,
+            Dna: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M4 14.5A4.5 4.5 0 0 1 8.5 10H10a3 3 0 0 1 3 3v0a3 3 0 0 1-3 3h-1.5A4.5 4.5 0 0 1 4 14.5Z"/><path d="M20 9.5A4.5 4.5 0 0 0 15.5 5H14a3 3 0 0 0-3 3v0a3 3 0 0 0 3 3h1.5A4.5 4.5 0 0 0 20 9.5Z"/></svg>`,
+            Bot: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>`,
+            GraduationCap: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M21.42 10.922a1 1 0 0 0-.019-1.838L12.83 5.18a2 2 0 0 0-1.66 0L2.6 9.084a1 1 0 0 0 0 1.838l8.57 3.908a2 2 0 0 0 1.66 0z"/><path d="M22 10v6"/><path d="M6 12.5V16a6 3 0 0 0 12 0v-3.5"/></svg>`,
+            Lightbulb: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6"/><path d="M10 22h4"/></svg>`,
+            BrainCircuit: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M12 2a5 5 0 0 0-5 5v2"/><path d="M17 4a5 5 0 0 1 5 5v2"/><path d="M7 12a5 5 0 0 1 5-5h.5a5 5 0 0 1 4.7 3.3"/><path d="M19 12a5 5 0 0 0-5 5v.5a5 5 0 0 0 3.3 4.7"/><path d="M5 17a5 5 0 0 0 5-5h2a5 5 0 0 0 5 5"/><circle cx="12" cy="12" r="2"/><circle cx="5" cy="5" r="2"/><circle cx="19" cy="5" r="2"/><circle cx="5" cy="19" r="2"/><circle cx="19" cy="19" r="2"/></svg>`,
+            ArrowRight: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>`,
+            RotateCcw: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>`,
+            CheckCircle: () => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><path d="m9 11 3 3L22 4"/></svg>`,
+            XCircle: () => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m15 9-6 6"/><path d="m9 9 6 6"/></svg>`,
+            Trophy: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M6 9H4.5a2.5 2.5 0 0 1 0-5H6"/><path d="M18 9h1.5a2.5 2.5 0 0 0 0-5H18"/><path d="M4 22h16"/><path d="M10 14.66V17c0 .55-.47.98-.97 1.21C7.85 18.75 7 20.24 7 22"/><path d="M14 14.66V17c0 .55.47.98.97 1.21C16.15 18.75 17 20.24 17 22"/><path d="M18 2H6v7a6 6 0 0 0 12 0V2Z"/></svg>`,
+            LoaderCircle: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>`,
+            Sparkles: (props = {}) => `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="${props.className || ''}"><path d="m12 3-1.912 5.813a2 2 0 0 1-1.275 1.275L3 12l5.813 1.912a2 2 0 0 1 1.275 1.275L12 21l1.912-5.813a2 2 0 0 1 1.275-1.275L21 12l-5.813-1.912a2 2 0 0 1-1.275-1.275L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>`
+        };
+
+        // --- Gemini API 交互模块 ---
+        const iconMap = {
+            "核心速览 (The Gist)": Icons.Lightbulb,
+            "外形联想法 (Look & Remember)": Icons.BrainCircuit,
+            "用法大师班 (Usage Masterclass)": Icons.BookOpen,
+            "日常联想活剧场 (Real-Life Theatre)": Icons.Users,
+            "词源侦探局 (Etymology Detective)": Icons.Dna,
+            '"双胞胎"辨析室 (Similar Word Clinic)': Icons.Search,
+            "考研直通车 (Exam Express)": Icons.GraduationCap,
+            "高分技巧点拨 (Pro-Tips)": Icons.Bot,
+            "字母变形记 (The Grand Finale Scene)": Icons.Sparkles,
+        };
+
+        // JSON Schema定义
+        const quizSchema = {
+            type: "OBJECT",
+            properties: {
+                steps: {
+                    type: "ARRAY",
+                    items: {
+                        type: "OBJECT",
+                        properties: {
+                            title: { type: "STRING" },
+                            question: { type: "STRING" },
+                            options: { type: "ARRAY", items: { type: "STRING" } },
+                            correctAnswer: { type: "STRING" },
+                            explanation: { type: "STRING" }
+                        },
+                        required: ["title", "question", "options", "correctAnswer", "explanation"]
+                    }
+                }
+            }
+        };
+
+        // 通用API调用函数
+        const callAPI = async (prompt, apiName = 'gemini', isJsonMode = false) => {
+            const config = API_CONFIGS[apiName];
+            if (!config) throw new Error(`未知的API: ${apiName}`);
+            
+            // 检查是否需要API Key
+            if (!config.key && apiName !== 'gemini') {
+                throw new Error(`${config.name} 需要配置API Key`);
+            }
+            
+            const payload = config.formatPayload(prompt, config.model);
+            if (isJsonMode && apiName === 'gemini') {
+                payload.generationConfig = {
+                    responseMimeType: "application/json",
+                    responseSchema: quizSchema
+                };
+            }
+            
+            // 动态构建headers
+            const headers = { ...config.headers };
+            if (!config.urlKeyParam && config.key) {
+                headers['Authorization'] = `Bearer ${config.key}`;
+            }
+            
+            // 对于Gemini，需要动态构建包含模型名的URL
+            let url = config.url;
+            if (apiName === 'gemini') {
+                // 从URL中提取基础部分并重新构建
+                const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
+                url = `${baseUrl}${config.model}:generateContent?key=${config.key}`;
+            } else {
+                url = config.urlKeyParam ? `${config.url}?key=${config.key}` : config.url;
+            }
+            
+            console.log(`调用API: ${config.name}, 模型: ${config.model}, URL: ${url}`);
+            
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: headers,
+                body: JSON.stringify(payload)
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`${config.name} API错误响应:`, errorText);
+                throw new Error(`${config.name} API Error: ${response.status} - ${errorText.substring(0, 200)}`);
+            }
+            
+            const responseText = await response.text();
+            console.log(`${config.name} API原始响应:`, responseText.substring(0, 500));
+            
+            // 检查响应是否是HTML（通常表示API Key或URL错误）
+            if (responseText.trim().startsWith('<!doctype') || responseText.trim().startsWith('<html')) {
+                throw new Error(`${config.name} 返回了HTML页面，请检查API Key和URL配置`);
+            }
+            
+            let data;
+            try {
+                data = JSON.parse(responseText);
+            } catch (e) {
+                console.error(`${config.name} JSON解析失败:`, e.message);
+                throw new Error(`${config.name} 返回了无效的JSON格式: ${e.message}`);
+            }
+            
+            return config.parseResponse(data);
+        };
+
+        const fetchWordAnalysisAndQuiz = async (word) => {
+            console.log(`Starting analysis for: ${word} using ${API_CONFIGS[state.currentAPI].name}`);
+            
+            // 第一步: 生成单词的详细讲解
+            const analysisPrompt = `
+              角色定位：
+              你是一位经验极其丰富、教学风格独树一帜的英语教师。你的个人品牌是"怪诞、风趣但高效"。你的首要目标不是枯燥地灌输，而是通过各种夸张、幽默、甚至有点荒诞的手段，让用户在欢笑中把英语单词刻进DNA里。你深信，学习的过程本该是一场充满乐趣的冒险。
+
+              核心任务与目标：
+              深度解析： 为用户提供对英语单词全面、深入且极度有趣的解释。
+              逻辑构建： 帮助用户彻底理解单词的内在形成逻辑，包括词根词缀、词源演变、形近词辨析、外形联想以及生活化联想。
+              实战结合： 将所有解释与考研英语的知识点紧密结合，并频繁引用用户已上传的"考研英语5500词汇文件"，强调其在真实考试中的价值。
+              兴趣激发： 点燃用户对英语学习的热情，将枯燥的记忆任务转变为一场充满期待的智力游戏。
+
+              单词"解剖"全流程 (Word Explanation Process):
+              当用户给出单词 "${word}" 后，你的解释必须像一场精彩的脱口秀，并严格按照以下 a 到 h 的完整顺序进行，不要有任何多余的开场白或结束语：
+
+              a) 核心速览 (The Gist):
+              首先，用一两句最精炼、最地道的话说清楚单词的核心含义和基本用法。
+
+              b) 外形联想法 (Look & Remember):
+              这是你的新增秘密武器！ 创造性地将单词的字母形状、排列组合与其含义进行天马行空的联想。
+              夸张举例： 比如解释 "gorge" (峡谷/狼吞虎咽)，你可以说："你看，'g'像一个张大的嘴，'o'是正要吞下去的食物，'rge'听起来像'饿极'，连起来就是'一个饿极了的嘴正在狼吞虎咽'！"
+
+              c) 用法大师班 (Usage Masterclass):
+              结合具体场景，用夸张幽默的方式讲解单词的地道用法和细微差别。
+              夸张演绎： 比如解释 "ubiquitous" (无处不在的)，你可以说："这个词是个社交牛人，哪儿都有它！但它可不是随便跟谁都搭伙的，它最爱和介词'in'或'among'这些跟班一起出场，告诉你它是在'某个特定范围里'无处不在，比如'smartphones are ubiquitous in modern life'。它不像'everywhere'那么随性，像个穿着燕尾服的绅士，精确地告诉你'我在这个宴会厅里无处不在'，而不是'我在大街上到处乱晃'。想表达高大上的'普遍存在'，用它，准没错！"
+
+              d) 日常联想活剧场 (Real-Life Theatre):
+              这是新增环节！我们要把单词从书本里拽出来，扔进你的日常生活里。
+              核心玩法：
+              情景再现 (Scenario Creation): 必须创造一个与"大学生"生活，特别是与"数学"、"计算机"等学科学习紧密相关的场景。
+              成语嫁接 (Idiom Connection): 必须将这个单词的意境与一个或多个广为人知的四字成语进行关联。
+              夸张演绎： 比如解释 "ubiquitous" (无处不在的)，你可以说："对于一个计算机专业的大学生来说，刚开始学C++时，代码里的bug简直就是 ubiquitous 的存在！你解决了一个，一编译，又冒出仨！这种感觉，用咱们老祖宗的四字成语来说，就叫'层出不穷'、'比比皆是'。"
+
+              e) 词源侦探局 (Etymology Detective):
+              聚焦"万能积木"：咱们不搞语言考古。我们的重点是那些在现代英语、尤其是在考研词汇里反复出现的"万能积木"——也就是最实用、最高频的词根和词缀。
+              夸张演绎： 比如解释 "detrimental" (有害的)，你可以说："'de-'这个前缀，就是'向下、变坏'的意思，像个总爱搞破坏的捣蛋鬼。'tri'和'ment'可以想象成'摩擦、磨损'，所以这个词的灵魂就是：'一个捣蛋鬼不断地把你往下摩擦、磨损，直到把你磨坏为止'——这可不就是'有害的'嘛！"
+
+              f) "双胞胎"辨析室 (Similar Word Clinic):
+              在这里，我们不仅要分清眼前的双胞胎，还要给另一个双胞胎身上装个"GPS定位器"。
+              核心玩法：
+              趣味对比 (Humorous Comparison): 首先，用最搞笑、最直观的方法区分当前单词和它的形近/义近词。
+              发射"记忆回旋镖" (Launch the Memory Boomerang): 这是铁律，绝无例外！ 你必须为每一个被提及的易混淆词，都单独发射一枚专属的"记忆回旋镖"。
+              【重要规则】 "记忆回旋镖"提供的记忆点是基于整个单词的外形、发音或趣味联想，严禁对其进行词根词缀的拆解。那是楼上"词源侦探局"的工作，我们绝不加班干同事的活儿！
+              夸张演绎： 比如辨析 "complement" (补充) 和 "compliment" (赞美)。"complement 中间那个 'e'，就是 'complete' (完整) 的 'e'！它的天职就是让事物变得'完整'，所以是'补充、补足'。现在，发射记忆回旋镖！ 当你下次在野外单独碰到它的兄弟 compliment 时，你要立马盯住它中间的那个 'i'！这个 'i' 就是 'I' (我)！别人对我(I)说了好话，当然是在'赞美'我啦！你看，我们完全没动用词根，就靠一个字母把它锁死了！"
+
+              g) 考研直通车 (Exam Express):
+              在这里，咱们要带上"考研专用GPS"，精准定位这个单词在战场上的坐标，并进行实弹演习！
+              精准定位 (Pinpoint Location): 首先，明确指出该单词在"考研英语5500词汇文件"中的位置（第几页）和重要性（高频词、核心词、偶考词等）。
+              真题扫射 (Real Question Barrage): 接下来是重头戏！你必须提供 至少2-3个 高质量的例句，优先选用历年真题中的句子。对于每个句子，都要像战地记者一样，进行简短的"战术分析"：指出这个词在这里扮演了什么角色（比如：是作者的态度风向标？是长难句的理解核心？还是完形填空的逻辑关键点？），帮助用户看透它在真实考试中的"伪装"。
+
+              h) 高分技巧点拨 (Pro-Tips):
+              在解释中自然融入考研英语的解题技巧，如"这个词在阅读中经常作为某个概念的同义替换出现"、"看到这个词，要注意作者的潜在态度是支持还是反对"。
+
+              i) 字母变形记 (The Grand Finale Scene):
+              这是你表演的最后一步。在完成以上所有文字讲解后，你必须将 b) 环节中对单词的字母外形的联想，浓缩成一幅纯粹的视觉画面。
+              为了确保AI绘画能同时抓住"字母外形"和"单词本意"，请使用这个更紧凑的黄金公式来构建你的英文Prompt：
+              核心指令 + 主体描述 + 风格词
+              核心指令 (放最前面，最关键！)
+              用这个词组开头，强制AI用字母作画：Calligram of the word "${word}"
+              主体描述 (描述画面内容)
+              紧接着告诉AI，这些字母要组成什么：...shaped as a [单词的含义], where the letters form [具体的画面部分].
+              例如：...shaped as a dragon, where the 'D' forms the head.
+              请在本部分的最后，单独输出一行英文Prompt，格式为："IMAGE_PROMPT: [你构建的完整英文prompt]"
+
+              互动风格 (Interaction Style):
+              幽默至上： 保持风趣、机智、略带夸张的语调。多用口语化的表达和俏皮话。
+              循循善诱： 积极鼓励用户提问，并用同样幽默但清晰的方式解答所有疑惑。
+
+              整体基调 (Overall Tone):
+              风趣幽默，才华横溢，富有激情，略带"怪咖"气质。
+              知识渊博，逻辑清晰，善于启发。
+              让用户在每一次互动中都感到："原来背单词可以这么好玩！"
+
+              语言要求： 必须使用中文回答！！！
+            `;
+
+            let analysisText;
+            try {
+                analysisText = await callAPI(analysisPrompt, state.currentAPI);
+                console.log("Analysis generated successfully.");
+            } catch (error) {
+                console.error("Error generating analysis:", error);
+                
+                // 尝试使用备用API (优先使用Gemini作为备用)
+                const availableAPIs = ['gemini', 'openai', 'deepseek'].filter(api => 
+                    api !== state.currentAPI && 
+                    (api === 'gemini' || API_CONFIGS[api].key !== '')
+                );
+                
+                if (availableAPIs.length === 0) {
+                    throw new Error("没有可用的备用API，请配置至少一个API密钥。");
+                }
+                
+                let lastError = error;
+                for (const backupAPI of availableAPIs) {
+                    try {
+                        console.log(`${state.currentAPI} failed, trying ${backupAPI}...`);
+                        state.loadingStatus = `${API_CONFIGS[state.currentAPI].name}失败，正在尝试${API_CONFIGS[backupAPI].name}...`;
+                        // 触发UI更新
+                        if (typeof render === 'function') render();
+                        
+                        analysisText = await callAPI(analysisPrompt, backupAPI);
+                        console.log(`Analysis generated successfully with ${backupAPI}.`);
+                        break;
+                    } catch (backupError) {
+                        console.error(`${backupAPI} also failed:`, backupError);
+                        lastError = backupError;
+                        continue;
+                    }
+                }
+                
+                if (!analysisText) {
+                    throw new Error(`所有可用的API都失败了。最后错误：${lastError.message}`);
+                }
+            }
+
+            // 第二步: 根据讲解生成选择题 (JSON格式)
+            const quizPrompt = `
+              角色: 你是一个聪明的问答游戏设计师。
+              任务: 这是关于单词 "${word}" 的一份风趣讲解，内容被分为了几个部分。请为每一个部分都创建一个高质量的四选一选择题，问题需要巧妙地测试用户对该部分核心知识点的理解。
+              
+              【关键要求】每个板块的题目类型必须体现其独特性，避免同质化：
+              
+              1. "核心速览 (The Gist)" - 考查基本含义理解
+              题型：词义选择、基本用法判断
+              选项风格：简洁的词义解释或用法描述
+              
+              2. "外形联想法 (Look & Remember)" - 考查字母联想创意
+              题型：字母形状联想、视觉记忆技巧
+              选项风格：具体的形象描述或联想方法
+              
+              3. "用法大师班 (Usage Masterclass)" - 考查语境运用
+              题型：搭配选择、语境判断、细微差别辨析
+              选项风格：具体的使用场景或搭配词组
+              
+              4. "日常联想活剧场 (Real-Life Theatre)" - 考查生活场景应用
+              题型：情景选择、成语对应、生活实例
+              选项风格：具体的生活场景或四字成语
+              
+              5. "词源侦探局 (Etymology Detective)" - 考查词根词缀知识
+              题型：词根含义、词缀作用、构词逻辑
+              选项风格：词根/词缀的含义或语言学解释
+              
+              6. ""双胞胎"辨析室 (Similar Word Clinic)" - 考查词汇辨析
+              题型：形近词区分、易混词对比、记忆技巧
+              选项风格：具体的区分方法或词汇对比
+              
+              7. "考研直通车 (Exam Express)" - 考查考试技巧
+              题型：真题场景、考试策略、出题规律
+              选项风格：考试相关的技巧或真题信息
+              
+              8. "高分技巧点拨 (Pro-Tips)" - 考查解题方法
+              题型：解题技巧、应试策略、高分要点
+              选项风格：具体的学习方法或应试建议
+              
+              9. "字母变形记 (The Grand Finale Scene)" - 考查视觉创意
+              题型：画面描述、艺术构思、创意联想
+              选项风格：具体的视觉元素或艺术描述
+              
+              互动性与积极情绪风格要求：
+              - 题干使用中文，第二人称"你"，语气积极游戏化，可适度加表情符号
+              - 题干12~25字，嵌入小场景，结尾鼓励语
+              - 选项4个，仅1个正确，长度差异化（6~20字），错误选项合理但不误导
+              - 避免重复措辞，每题都要体现对应板块的独特考查点
+              
+              讲解内容如下:
+              ---
+              ${analysisText}
+              ---
+              你的输出必须是一个纯粹的JSON对象，严格遵循下面的Schema。
+              【重要规则】: 
+              1. 对于每个部分的 "explanation" 字段，你必须【一字不差地】使用上面讲解内容中对应部分的【完整原文】作为其值，不要进行任何形式的总结、缩写或改写。
+              2. 必须包含完整的steps数组，包含所有9个部分的问答。
+              3. 不要在JSON前后添加任何解释文字或代码块标记。
+              4. 确保JSON格式完全有效，所有字符串都用双引号包围。
+            `;
+            
+            const quizSchema = {
+                type: "OBJECT",
+                properties: {
+                    steps: {
+                        type: "ARRAY",
+                        items: {
+                            type: "OBJECT",
+                            properties: {
+                                title: { type: "STRING" },
+                                question: { type: "STRING" },
+                                options: { type: "ARRAY", items: { type: "STRING" } },
+                                correctAnswer: { type: "STRING" },
+                                explanation: { type: "STRING" }
+                            },
+                            required: ["title", "question", "options", "correctAnswer", "explanation"]
+                        }
+                    }
+                }
+            };
+
+            try {
+                let quizData;
+                
+                // 根据不同API处理JSON响应
+                if (state.currentAPI === 'gemini') {
+                    // Gemini使用JSON模式
+                    const quizJsonText = await callAPI(quizPrompt, 'gemini', true);
+                    quizData = JSON.parse(quizJsonText);
+                } else {
+                    // 对于其他API，需要在prompt中要求JSON格式
+                    const jsonQuizPrompt = quizPrompt + '\n\n请严格按照JSON格式输出，不要包含任何其他文字或解释。确保包含完整的steps数组。';
+                    let quizJsonText = await callAPI(jsonQuizPrompt, state.currentAPI);
+                    
+                    console.log(`${state.currentAPI} 原始响应:`, quizJsonText);
+                    
+                    // 尝试多种方式提取JSON
+                    let jsonText = '';
+                    
+                    // 清理响应文本
+                    quizJsonText = quizJsonText.trim();
+                    
+                    // 移除可能的代码块标记
+                    quizJsonText = quizJsonText.replace(/```json\s*/g, '').replace(/```\s*/g, '');
+                    
+                    // 寻找JSON的开始和结束位置
+                    let jsonStart = quizJsonText.indexOf('{');
+                    let jsonEnd = -1;
+                    
+                    if (jsonStart !== -1) {
+                        // 从后往前找最后一个完整的}
+                        let braceCount = 0;
+                        let inString = false;
+                        let escapeNext = false;
+                        
+                        for (let i = jsonStart; i < quizJsonText.length; i++) {
+                            const char = quizJsonText[i];
+                            
+                            if (escapeNext) {
+                                escapeNext = false;
+                                continue;
+                            }
+                            
+                            if (char === '\\') {
+                                escapeNext = true;
+                                continue;
+                            }
+                            
+                            if (char === '"' && !escapeNext) {
+                                inString = !inString;
+                                continue;
+                            }
+                            
+                            if (!inString) {
+                                if (char === '{') {
+                                    braceCount++;
+                                } else if (char === '}') {
+                                    braceCount--;
+                                    if (braceCount === 0) {
+                                        jsonEnd = i;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                        
+                        if (jsonEnd !== -1) {
+                            jsonText = quizJsonText.substring(jsonStart, jsonEnd + 1);
+                            console.log('找到完整的JSON对象，长度:', jsonText.length);
+                        } else {
+                            console.warn('JSON似乎被截断了，尝试修复...');
+                            // 尝试找到最后一个完整的数组项
+                            const partialJson = quizJsonText.substring(jsonStart);
+                            
+                            // 对于OpenAI格式，寻找最后一个完整的对象
+                            const lastCompleteItem = Math.max(
+                                partialJson.lastIndexOf('"}'),
+                                partialJson.lastIndexOf('}')
+                            );
+                            
+                            if (lastCompleteItem !== -1) {
+                                // 尝试构建完整的JSON
+                                let repairedJson = partialJson.substring(0, lastCompleteItem + 1);
+                                
+                                // 检查是否需要添加缺失的括号
+                                let openBraces = (repairedJson.match(/\{/g) || []).length;
+                                let closeBraces = (repairedJson.match(/\}/g) || []).length;
+                                let openBrackets = (repairedJson.match(/\[/g) || []).length;
+                                let closeBrackets = (repairedJson.match(/\]/g) || []).length;
+                                
+                                // 添加缺失的括号
+                                while (closeBrackets < openBrackets) {
+                                    repairedJson += ']';
+                                    closeBrackets++;
+                                }
+                                while (closeBraces < openBraces) {
+                                    repairedJson += '}';
+                                    closeBraces++;
+                                }
+                                
+                                jsonText = repairedJson;
+                                console.log('尝试修复JSON，长度:', jsonText.length);
+                            } else {
+                                throw new Error(`${state.currentAPI}返回的JSON格式不完整，无法修复`);
+                            }
+                        }
+                    } else {
+                        throw new Error(`${state.currentAPI}响应中没有找到JSON开始标记`);
+                    }
+                    
+                    try {
+                        quizData = JSON.parse(jsonText);
+                        console.log(`${state.currentAPI} JSON解析成功:`, quizData);
+                    } catch (e) {
+                        console.error(`${state.currentAPI} JSON解析失败:`, e.message);
+                        console.error('尝试解析的JSON文本:', jsonText.substring(0, 500) + '...');
+                        
+                        // 尝试更激进的修复策略
+                        console.log('尝试激进修复策略...');
+                        try {
+                            // 查找steps数组的开始
+                            const stepsStart = jsonText.indexOf('"steps"');
+                            if (stepsStart !== -1) {
+                                const arrayStart = jsonText.indexOf('[', stepsStart);
+                                if (arrayStart !== -1) {
+                                    // 查找所有完整的step对象
+                                    const stepObjects = [];
+                                    let currentPos = arrayStart + 1;
+                                    let braceDepth = 0;
+                                    let currentObj = '';
+                                    let inString = false;
+                                    let escapeNext = false;
+                                    
+                                    for (let i = currentPos; i < jsonText.length; i++) {
+                                        const char = jsonText[i];
+                                        
+                                        if (escapeNext) {
+                                            escapeNext = false;
+                                            currentObj += char;
+                                            continue;
+                                        }
+                                        
+                                        if (char === '\\') {
+                                            escapeNext = true;
+                                            currentObj += char;
+                                            continue;
+                                        }
+                                        
+                                        if (char === '"' && !escapeNext) {
+                                            inString = !inString;
+                                        }
+                                        
+                                        if (!inString) {
+                                            if (char === '{') {
+                                                braceDepth++;
+                                            } else if (char === '}') {
+                                                braceDepth--;
+                                                if (braceDepth === 0) {
+                                                    currentObj += char;
+                                                    try {
+                                                        const obj = JSON.parse(currentObj);
+                                                        stepObjects.push(obj);
+                                                        currentObj = '';
+                                                        // 跳过逗号和空白
+                                                        while (i + 1 < jsonText.length && /[\s,]/.test(jsonText[i + 1])) {
+                                                            i++;
+                                                        }
+                                                        continue;
+                                                    } catch {
+                                                        // 如果解析失败，停止尝试
+                                                        break;
+                                                    }
+                                                }
+                                            }
+                                        }
+                                        
+                                        currentObj += char;
+                                    }
+                                    
+                                    if (stepObjects.length > 0) {
+                                        quizData = { steps: stepObjects };
+                                        console.log(`成功修复JSON，获得${stepObjects.length}个步骤`);
+                                    } else {
+                                        throw new Error('无法从损坏的JSON中恢复任何有效数据');
+                                    }
+                                } else {
+                                    throw new Error('JSON中没有找到steps数组');
+                                }
+                            } else {
+                                throw new Error('JSON中没有找到steps字段');
+                            }
+                        } catch (repairError) {
+                            console.error('JSON修复也失败了:', repairError.message);
+                            throw new Error(`${state.currentAPI}返回的JSON格式损坏且无法修复: ${e.message}`);
+                        }
+                    }
+                }
+                console.log("Quiz generated successfully.");
+                
+                                // 验证和处理返回的数据
+                console.log('Quiz data received:', quizData);
+                
+                if (!quizData) {
+                    throw new Error('API返回了空数据');
+                }
+                
+                if (!quizData.steps) {
+                    console.error('API返回的数据结构:', JSON.stringify(quizData, null, 2));
+                    
+                    // 尝试从其他可能的字段中恢复数据
+                    if (quizData.quiz && Array.isArray(quizData.quiz)) {
+                        console.log('尝试从quiz字段恢复数据');
+                        quizData.steps = quizData.quiz;
+                    } else if (quizData.questions && Array.isArray(quizData.questions)) {
+                        console.log('尝试从questions字段恢复数据');
+                        quizData.steps = quizData.questions;
+                    } else if (quizData.data && quizData.data.steps && Array.isArray(quizData.data.steps)) {
+                        console.log('尝试从data.steps字段恢复数据');
+                        quizData.steps = quizData.data.steps;
+                    } else {
+                        throw new Error('API返回的数据格式不正确，缺少steps字段');
+                    }
+                }
+                
+                if (!Array.isArray(quizData.steps)) {
+                    console.error('steps字段不是数组:', typeof quizData.steps, quizData.steps);
+                    throw new Error('API返回的steps字段不是数组格式');
+                }
+                
+                if (quizData.steps.length === 0) {
+                    throw new Error('API返回的steps数组为空');
+                }
+                
+                // 为每个步骤添加对应的图标 SVG 字符串
+                quizData.steps.forEach((step, index) => {
+                    console.log(`处理步骤 ${index}:`, {
+                        id: step.id,
+                        title: step.title,
+                        correctAnswer: step.correctAnswer,
+                        correctIndex: step.correctIndex,
+                        optionsLength: step.options ? step.options.length : 0,
+                        step_number: step.step_number
+                    });
+                    
+                    // 处理OpenAI格式的特殊字段映射
+                    if (step.options && Array.isArray(step.options) && step.options[0] && typeof step.options[0] === 'object') {
+                        // OpenAI格式：options是对象数组，包含text和is_correct字段
+                        console.log('检测到OpenAI格式，转换选项...');
+                        const convertedOptions = [];
+                        let correctAnswer = null;
+                        
+                        step.options.forEach(option => {
+                            if (option.text) {
+                                convertedOptions.push(option.text);
+                                if (option.is_correct) {
+                                    correctAnswer = option.text;
+                                }
+                            }
+                        });
+                        
+                        step.options = convertedOptions;
+                        if (correctAnswer) {
+                            step.correctAnswer = correctAnswer;
+                        }
+                        
+                        console.log(`步骤 ${index} OpenAI格式转换完成:`, {
+                            options: step.options,
+                            correctAnswer: step.correctAnswer
+                        });
+                    }
+                    
+                    // 修复缺失的字段
+                    if (!step.title) {
+                        // 尝试从id字段推断title，或者根据index推断
+                        const titleMap = {
+                            'a': '核心速览 (The Gist)',
+                            'b': '外形联想法 (Look & Remember)', 
+                            'c': '核心玩法 (Usage Mastery)',
+                            'd': '日常联想活剧场 (Real-Life Theatre)',
+                            'e': '词源侦探局 (Etymology Detective)',
+                            'f': '"双胞胎"辨析室 (Similar Word Clinic)',
+                            'g': '考研直通车 (Exam Express)',
+                            'h': '高分技巧点拨 (Pro-Tips)',
+                            'i': '字母变形记 (The Grand Finale Scene)'
+                        };
+                        
+                        if (step.id && titleMap[step.id]) {
+                            step.title = titleMap[step.id];
+                        } else {
+                            // 根据index推断title
+                            const indexToTitle = [
+                                '核心速览 (The Gist)',
+                                '外形联想法 (Look & Remember)',
+                                '核心玩法 (Usage Mastery)', 
+                                '日常联想活剧场 (Real-Life Theatre)',
+                                '词源侦探局 (Etymology Detective)',
+                                '"双胞胎"辨析室 (Similar Word Clinic)',
+                                '考研直通车 (Exam Express)',
+                                '高分技巧点拨 (Pro-Tips)',
+                                '字母变形记 (The Grand Finale Scene)'
+                            ];
+                            step.title = indexToTitle[index] || `步骤 ${index + 1}`;
+                        }
+                        console.warn(`步骤 ${index} 缺少title字段，已修复为: ${step.title}`);
+                    }
+                    
+                    // 修复correctAnswer字段
+                    if (!step.correctAnswer && step.correctIndex !== undefined && step.options) {
+                        if (step.correctIndex >= 0 && step.correctIndex < step.options.length) {
+                            step.correctAnswer = step.options[step.correctIndex];
+                            console.log(`步骤 ${index} 从correctIndex(${step.correctIndex})修复correctAnswer: "${step.correctAnswer}"`);
+                        } else {
+                            console.error(`步骤 ${index} correctIndex(${step.correctIndex})超出选项范围(${step.options.length})`);
+                        }
+                    }
+                    
+                    // 验证correctAnswer是否在选项中
+                    if (step.correctAnswer && step.options) {
+                        const answerExists = step.options.some(option => option === step.correctAnswer);
+                        if (!answerExists) {
+                            console.warn(`步骤 ${index} correctAnswer "${step.correctAnswer}" 不在选项中，尝试修复...`);
+                            // 尝试找到最相似的选项
+                            let bestMatch = step.options[0];
+                            let bestScore = 0;
+                            
+                            step.options.forEach(option => {
+                                // 简单的相似度检测
+                                const similarity = option.toLowerCase().includes(step.correctAnswer.toLowerCase()) || 
+                                                 step.correctAnswer.toLowerCase().includes(option.toLowerCase());
+                                if (similarity) {
+                                    bestMatch = option;
+                                    bestScore = 1;
+                                }
+                            });
+                            
+                            step.correctAnswer = bestMatch;
+                            console.log(`步骤 ${index} 修复correctAnswer为: "${step.correctAnswer}"`);
+                        }
+                    }
+                    
+                    // 如果仍然没有correctAnswer，使用第一个选项
+                    if (!step.correctAnswer && step.options && step.options.length > 0) {
+                        step.correctAnswer = step.options[0];
+                        console.warn(`步骤 ${index} 没有正确答案，默认使用第一个选项: "${step.correctAnswer}"`);
+                    }
+                    
+                    // 最终验证
+                    console.log(`步骤 ${index} 最终状态:`, {
+                        title: step.title,
+                        correctAnswer: step.correctAnswer,
+                        options: step.options,
+                        correctIndex: step.correctIndex
+                    });
+                    
+                    const iconFn = iconMap[step.title.trim()] || Icons.Lightbulb;
+                    step.iconSVG = iconFn({ className: "text-indigo-400" });
+                });
+
+                // 提取字母变形记的IMAGE_PROMPT并生成动态画像URL
+                let imageUrl = `https://image.pollinations.ai/prompt/Calligram%20of%20the%20word%20%22${word}%22%20shaped%20as%20a%20visual%20representation%20of%20its%20meaning?width=1024&height=1024&seed=100&model=flux&nologo=true`;
+                let imageGenerationFailed = false;
+                let imageErrorMessage = '';
+                
+                // 查找字母变形记部分，提取IMAGE_PROMPT
+                const finaleStep = quizData.steps.find(step => 
+                    step.title && (
+                        step.title.includes("字母变形记") || 
+                        step.title.includes("Grand Finale")
+                    )
+                );
+                
+                if (finaleStep && finaleStep.explanation) {
+                    const promptMatch = finaleStep.explanation.match(/IMAGE_PROMPT:\s*(.+)/);
+                    if (promptMatch) {
+                        const customPrompt = promptMatch[1].trim();
+                        const customImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(customPrompt)}?width=1024&height=1024&seed=100&model=flux&nologo=true`;
+                        
+                        // 测试自定义图像URL是否可用
+                        try {
+                            console.log('测试自定义图像URL:', customImageUrl);
+                            const imageResponse = await fetch(customImageUrl, { 
+                                method: 'HEAD',
+                                timeout: 5000 // 5秒超时
+                            });
+                            
+                            if (imageResponse.ok) {
+                                imageUrl = customImageUrl;
+                                console.log('自定义图像URL可用');
+                            } else {
+                                throw new Error(`图像服务返回错误: ${imageResponse.status}`);
+                            }
+                        } catch (imageError) {
+                            console.warn('自定义图像生成失败，使用默认图像:', imageError.message);
+                            imageGenerationFailed = true;
+                            imageErrorMessage = `图像生成失败: ${imageError.message}`;
+                            // 保持使用默认imageUrl
+                        }
+                    }
+                }
+                
+                quizData.finale = {
+                    title: "字母变形记 (The Grand Finale Scene)",
+                    imageUrl: imageUrl,
+                    imageGenerationFailed: imageGenerationFailed,
+                    imageErrorMessage: imageErrorMessage
+                };
+                
+                return quizData;
+            } catch (error) {
+                console.error("Error generating quiz:", error);
+                throw new Error("根据讲解生成问答关卡失败，请重试。");
+            }
+        };
+
+        // --- API配置 ---
+        const API_CONFIGS = {
+            gemini: {
+                name: 'Gemini',
+                url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent',
+                defaultUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent',
+                key: 'AIzaSyCAAQ6v3TYSiiAHZE1FwsuxeARTFBRsboo',
+                model: 'gemini-2.0-flash-exp',
+                defaultModel: 'gemini-2.0-flash-exp',
+                headers: { 'Content-Type': 'application/json' },
+                formatPayload: (prompt) => ({
+                    contents: [{ role: "user", parts: [{ text: prompt }] }]
+                }),
+                parseResponse: (data) => data.candidates[0].content.parts[0].text,
+                urlKeyParam: true
+            },
+            openai: {
+                name: 'OpenAI',
+                url: 'https://api.openai.com/v1/chat/completions',
+                defaultUrl: 'https://api.openai.com/v1/chat/completions',
+                key: '',
+                model: 'gpt-4o',
+                defaultModel: 'gpt-4o',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer '
+                },
+                formatPayload: (prompt, model) => ({
+                    model: model || 'gpt-4o',
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 4000
+                }),
+                parseResponse: (data) => data.choices[0].message.content,
+                urlKeyParam: false
+            },
+            deepseek: {
+                name: 'DeepSeek',
+                url: 'https://api.deepseek.com/v1/chat/completions',
+                defaultUrl: 'https://api.deepseek.com/v1/chat/completions',
+                key: '',
+                model: 'deepseek-chat',
+                defaultModel: 'deepseek-chat',
+                headers: { 
+                    'Content-Type': 'application/json',
+                    'Authorization': 'Bearer '
+                },
+                formatPayload: (prompt, model) => ({
+                    model: model || 'deepseek-chat',
+                    messages: [{ role: 'user', content: prompt }],
+                    max_tokens: 4000
+                }),
+                parseResponse: (data) => data.choices[0].message.content,
+                urlKeyParam: false
+            }
+        };
+
+        // --- 状态管理 ---
+        let state = {
+            gameState: 'welcome', // 'welcome', 'loading', 'playing', 'results'
+            loadingStatus: '',
+            currentWordData: null,
+            currentStep: 0,
+            score: 0,
+            error: null,
+            isLoading: false,
+            currentAPI: 'gemini' // 默认使用Gemini
+        };
+
+        // --- UI 渲染函数 ---
+        const contentRoot = document.getElementById('content-root');
+
+        const renderWelcomeScreen = () => {
+            const isLoading = state.isLoading;
+            return `
+                <div class="text-center p-8 max-w-2xl mx-auto animate-fade-in">
+                    ${Icons.Bot({ size: 64, className: "mx-auto text-indigo-300 mb-4 animate-bounce" })}
+                    <h1 class="text-3xl md:text-4xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">欢迎来到《单词疯人院》</h1>
+                    <p class="text-lg text-slate-300/90 mb-8">把任何单词砸向我，AI老师为你即兴开课！</p>
+                    <form id="start-form" class="flex flex-col sm:flex-row gap-4 justify-center items-center">
+                        <div class="relative w-full max-w-sm">
+                            <input type="text" id="word-input" placeholder="输入任意单词开始闯关！" class="glass-input w-full pl-4 pr-12 py-3 rounded-lg text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900 transition-all duration-300" ${isLoading ? 'disabled' : ''}>
+                            <span class="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400">🔍</span>
+                        </div>
+                        <button type="submit" class="ripple-container w-full sm:w-auto fancy-btn font-semibold px-8 py-3 rounded-lg transform hover:scale-[1.02] transition-all duration-300 disabled:opacity-60 disabled:scale-100" ${isLoading ? 'disabled' : ''}>
+                            ${isLoading ? 'AI备课中...' : '开始闯关'}
+                        </button>
+                    </form>
+                    <div class="mt-6 flex flex-wrap gap-2 justify-center">
+                        <button class="chip-button" data-chip-value="algorithm">algorithm</button>
+                        <button class="chip-button" data-chip-value="resilient">resilient</button>
+                        <button class="chip-button" data-chip-value="meticulous">meticulous</button>
+                        <button class="chip-button" data-chip-value="serendipity">serendipity</button>
+                        <button class="chip-button" data-chip-value="concise">concise</button>
+                    </div>
+                    
+                    <!-- API选择器 -->
+                    <div class="mt-8 p-4 glass-card rounded-lg">
+                        <p class="text-sm text-slate-400 mb-3 text-center">选择AI引擎</p>
+                        <div class="grid grid-cols-3 gap-2">
+                            <button class="api-selector ${state.currentAPI === 'gemini' ? 'active' : ''} px-3 py-2 rounded-lg text-sm transition-all" data-api="gemini">
+                                🤖 Gemini
+                            </button>
+                            <button class="api-selector ${state.currentAPI === 'openai' ? 'active' : ''} px-3 py-2 rounded-lg text-sm transition-all" data-api="openai">
+                                🚀 OpenAI
+                            </button>
+                            <button class="api-selector ${state.currentAPI === 'deepseek' ? 'active' : ''} px-3 py-2 rounded-lg text-sm transition-all" data-api="deepseek">
+                                🔥 DeepSeek
+                            </button>
+                        </div>
+                        
+                        <!-- API配置区域 -->
+                        <div id="api-config" class="mt-4 p-3 bg-slate-800/50 rounded-lg" style="display: none;">
+                            <div class="space-y-3">
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">API URL</label>
+                                    <input type="text" id="api-url" class="w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm" placeholder="API地址">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">API Key</label>
+                                    <input type="password" id="api-key" class="w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm" placeholder="API密钥">
+                                </div>
+                                <div>
+                                    <label class="block text-xs text-slate-400 mb-1">模型名称</label>
+                                    <input type="text" id="api-model" class="w-full px-2 py-1 bg-slate-700/50 border border-slate-600 rounded text-white text-sm" placeholder="模型名称 (如: gemini-2.0-flash)">
+                                </div>
+                                <div class="flex gap-2">
+                                    <button id="save-config" class="px-3 py-1 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-500">保存</button>
+                                    <button id="reset-config" class="px-3 py-1 bg-slate-600 text-white rounded text-sm hover:bg-slate-500">重置</button>
+                                    <button id="close-config" class="px-3 py-1 bg-gray-600 text-white rounded text-sm hover:bg-gray-500">关闭</button>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 text-center">
+                            <button id="config-button" class="text-xs text-slate-400 hover:text-slate-300 transition-colors">⚙️ 配置API</button>
+                            <div class="mt-2 text-xs text-slate-500">
+                                <span id="api-status-hint">当前: ${API_CONFIGS[state.currentAPI].name}${!API_CONFIGS[state.currentAPI].key && state.currentAPI !== 'gemini' ? ' (需要配置API Key)' : ''}</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderLoadingScreen = () => `
+            <div class="text-center p-8 max-w-2xl mx-auto text-white animate-fade-in">
+                ${Icons.Sparkles({ size: 64, className: "mx-auto text-indigo-300 mb-4 animate-pulse" })}
+                <h2 class="text-3xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">AI老师正在火力全开！</h2>
+                <p class="text-slate-300/90 text-lg">${state.loadingStatus}</p>
+                <div class="w-full bg-slate-700/60 rounded-full h-2.5 mt-8 overflow-hidden border border-slate-700/60">
+                    <div class="progress-gradient h-2.5 rounded-full w-full animate-loading-bar"></div>
+                </div>
+            </div>
+        `;
+        
+        const renderResultsScreen = () => {
+            const { score, currentWordData } = state;
+            const total = currentWordData.steps.length;
+            const finalImageUrl = currentWordData.finale.imageUrl;
+            const imageGenerationFailed = currentWordData.finale.imageGenerationFailed;
+
+            // 只有在图像生成成功时才预加载图片
+            if (!imageGenerationFailed) {
+                const img = new Image();
+                img.src = finalImageUrl;
+                img.onload = () => {
+                    const imgElement = document.getElementById('result-image');
+                    const loaderElement = document.getElementById('result-image-loader');
+                    if (imgElement) imgElement.classList.remove('opacity-0');
+                    if (loaderElement) loaderElement.style.display = 'none';
+                };
+                img.onerror = () => {
+                    const imgContainer = document.getElementById('result-image-container');
+                    const loaderElement = document.getElementById('result-image-loader');
+                    if (imgContainer && loaderElement) {
+                        loaderElement.style.display = 'none';
+                        imgContainer.innerHTML = `
+                            <div class="w-full h-full flex items-center justify-center bg-red-500/20 border border-red-400 rounded-lg">
+                                <div class="text-center text-red-300">
+                                    <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                                        <path fill-rule="evenodd" d="M13.477 14.89A6 6 0 015.11 6.524l8.367 8.368zm1.414-1.414L6.524 5.11a6 6 0 018.367 8.367zM18 10a8 8 0 11-16 0 8 8 0 0116 0z" clip-rule="evenodd"></path>
+                                    </svg>
+                                    <p class="text-sm">图像加载失败</p>
+                                </div>
+                            </div>
+                        `;
+                    }
+                };
+            }
+
+            return `
+                <div class="relative">
+                    <div class="confetti-container" id="confetti-root"></div>
+                    <div class="text-center p-6 max-w-2xl mx-auto glass-card rounded-2xl animate-fade-in">
+                    ${Icons.Trophy({ className: "mx-auto text-yellow-400 mb-4" })}
+                        <h1 class="text-4xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">闯关成功！</h1>
+                    <p class="text-2xl text-slate-300 mb-6">你的得分: <span class="font-bold text-green-400">${score} / ${total}</span></p>
+                    <div class="mb-6">
+                        <p class="text-slate-400 mb-4">这是为你专属打造的"单词画像"奖励！</p>
+                        <div id="result-image-container" class="w-full max-w-md mx-auto aspect-square bg-slate-900/50 rounded-lg flex items-center justify-center border border-slate-700/70 relative overflow-hidden">
+                            ${imageGenerationFailed ? 
+                                `<div class="w-full h-full flex items-center justify-center bg-orange-500/20 border border-orange-400 rounded-lg">
+                                    <div class="text-center text-orange-300">
+                                        <svg class="w-8 h-8 mx-auto mb-2" fill="currentColor" viewBox="0 0 20 20">
+                                            <path fill-rule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clip-rule="evenodd"></path>
+                                        </svg>
+                                        <p class="text-sm">图像生成失败</p>
+                                        <p class="text-xs text-orange-200 mt-1">网络连接问题</p>
+                                    </div>
+                                </div>` :
+                                `<div id="result-image-loader" class="absolute inset-0 flex items-center justify-center">
+                                    ${Icons.LoaderCircle({ className: "animate-spin h-8 w-8 text-slate-400" })}
+                                </div>
+                                <img id="result-image" src="${finalImageUrl}" alt="单词画像" class="w-full h-full object-cover rounded-lg transition-opacity duration-500 opacity-0" />`
+                            }
+                        </div>
+                    </div>
+                        <button id="reset-button" class="ripple-container flex items-center gap-2 mx-auto fancy-btn px-6 py-3 rounded-lg focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900">
+                        ${Icons.RotateCcw()} 再来一局
+                    </button>
+                    </div>
+                </div>
+            `;
+        };
+
+        const renderPlayingScreen = () => {
+            const { currentStep, currentWordData, score } = state;
+            const step = currentWordData.steps[currentStep];
+            const progress = ((currentStep + 1) / currentWordData.steps.length) * 100;
+            
+            return `
+                <div class="flex flex-col gap-8 w-full animate-fade-in">
+                    <div class="flex items-center gap-4">
+                        <div class="w-full bg-slate-700 rounded-full h-2.5">
+                            <div class="progress-gradient h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
+                        </div>
+                        <div class="text-white font-bold text-lg">${score} / ${currentWordData.steps.length}</div>
+                    </div>
+                    <div id="quiz-card-container" class="relative h-[550px]">
+                        ${renderQuizCard(step)}
+                    </div>
+                </div>
+            `;
+        };
+
+        // 格式化解析内容，增强可读性
+        const formatExplanation = (text) => {
+            if (!text) return '';
+            
+            try {
+                // 简化处理，只做基本的格式化
+                let formattedText = text;
+                
+                // 处理IMAGE_PROMPT行
+                formattedText = formattedText.replace(/IMAGE_PROMPT:\s*(.+)/g, '<div class="mt-4 p-3 bg-slate-800/50 rounded-lg border border-indigo-500/30"><div class="text-xs text-indigo-300 mb-1">🎨 画像提示词</div><div class="text-sm text-slate-400 font-mono">$1</div></div>');
+                
+                // 简单的加粗处理 - 完全移除加粗标记，不做任何替换
+                formattedText = formattedText.replace(/\*\*([^*]+?)\*\*/g, '$1');
+                
+                // 处理标题 - 使用漂亮字体
+                formattedText = formattedText.replace(/([a-z]\)) ([^：\n]+)：/g, '<div class="mt-6 mb-3"><span class="inline-block bg-gradient-to-r from-indigo-500 to-purple-500 text-white px-3 py-1.5 rounded-lg text-sm font-bold shadow-lg font-subtitle">$1 $2</span></div>');
+                
+                // 处理引用
+                formattedText = formattedText.replace(/"([^"]+)"/g, '<span class="text-cyan-200 italic">"$1"</span>');
+                
+                // 处理单引号
+                formattedText = formattedText.replace(/'([^']+)'/g, '<span class="text-yellow-300">\'$1\'</span>');
+                
+                // 基本分段
+                formattedText = formattedText.replace(/([。！])\s*(?=\S)/g, '$1<br><br>');
+                
+                // 检查结果是否包含错误的HTML类名
+                if (formattedText.includes('font-bold text-white bg-indigo-600/20')) {
+                    console.warn('格式化出现错误，返回原始文本');
+                    return text.replace(/\n/g, '<br>');
+                }
+                
+                return formattedText;
+                
+            } catch (error) {
+                console.error('格式化失败，返回原始文本:', error);
+                // 如果格式化失败，直接返回原始文本，只做换行处理
+                return text.replace(/\n/g, '<br>');
+            }
+        };
+
+        const renderQuizCard = (step) => {
+            const optionsHtml = step.options.map((option, index) => `
+                <button data-option="${option}" class="quiz-option ripple-container w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border bg-slate-700/60 border-slate-600 hover:bg-slate-600/80 hover:border-indigo-400/70 text-slate-100 focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900">
+                    <span>${option}</span>
+                    <span class="feedback-icon"></span>
+                </button>
+            `).join('');
+
+            return `
+                <div id="quiz-card" class="glass-card rounded-2xl p-6 w-full h-full flex flex-col group will-change-transform">
+                    <div class="flex-grow overflow-y-auto pr-2 custom-scroll">
+                        <div class="flex items-center mb-4">
+                            <div class="bg-indigo-600/20 p-2 rounded-lg mr-4">${step.iconSVG}</div>
+                            <h2 class="text-xl font-bold text-white">${step.title}</h2>
+                        </div>
+                        <p class="text-slate-300 mb-6 text-lg">${step.question}</p>
+                        <div class="space-y-3">${optionsHtml}</div>
+                        <div id="explanation-box" class="hidden mt-6 p-6 glass-card rounded-lg border border-indigo-400/20">
+                            <div class="flex items-center mb-4">
+                                <div class="bg-gradient-to-r from-indigo-500 to-purple-500 p-2 rounded-lg mr-3">
+                                    ${Icons.Lightbulb({ className: "text-white" })}
+                        </div>
+                                <h3 class="text-xl font-brand bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">深度解析</h3>
+                    </div>
+                            <div class="explanation-content text-slate-200 whitespace-pre-line leading-relaxed text-base">
+                                ${formatExplanation(step.explanation)}
+                            </div>
+                        </div>
+                    </div>
+                    <button id="next-button" class="hidden mt-6 w-full flex-shrink-0 flex items-center justify-center gap-2 ripple-container fancy-btn font-semibold px-6 py-3 rounded-lg transform hover:scale-[1.02] transition-all duration-300">
+                        ${state.currentStep < state.currentWordData.steps.length - 1 ? '下一关' : '查看战绩'}
+                        ${Icons.ArrowRight()}
+                    </button>
+                </div>
+            `;
+        };
+        
+        const renderError = (message) => {
+            const errorElement = document.createElement('div');
+            errorElement.className = "absolute top-5 left-1/2 -translate-x-1/2 bg-red-500/80 text-white p-3 rounded-lg shadow-lg animate-fade-in z-50";
+            errorElement.textContent = message;
+            document.body.appendChild(errorElement);
+            setTimeout(() => errorElement.remove(), 5000);
+        };
+
+        // --- 主渲染/更新函数 ---
+        const render = () => {
+            switch (state.gameState) {
+                case 'welcome':
+                    contentRoot.innerHTML = renderWelcomeScreen();
+                    break;
+                case 'loading':
+                    contentRoot.innerHTML = renderLoadingScreen();
+                    break;
+                case 'playing':
+                    contentRoot.innerHTML = renderPlayingScreen();
+                    break;
+                case 'results':
+                    contentRoot.innerHTML = renderResultsScreen();
+                    // 结果页：触发彩带
+                    const confettiRoot = document.getElementById('confetti-root');
+                    if (confettiRoot) {
+                        for (let i = 0; i < 60; i++) {
+                            const el = document.createElement('div');
+                            el.className = 'confetti';
+                            const colors = ['#fde047', '#60a5fa', '#34d399', '#f472b6', '#a78bfa', '#22d3ee'];
+                            const x = Math.random() * 100 + 'vw';
+                            const r = (Math.random() * 360) + 'deg';
+                            const d = (6 + Math.random() * 4) + 's';
+                            el.style.setProperty('--c', colors[Math.floor(Math.random()*colors.length)]);
+                            el.style.setProperty('--x', x);
+                            el.style.setProperty('--r', r);
+                            el.style.setProperty('--d', d);
+                            confettiRoot.appendChild(el);
+                            setTimeout(() => el.remove(), 11000);
+                        }
+                    }
+                    break;
+            }
+        };
+
+        // --- 事件处理 ---
+        const handleStart = async (word) => {
+            if (!word) {
+                renderError("请输入一个单词！");
+                return;
+            }
+            state.isLoading = true;
+            state.gameState = 'loading';
+            render();
+
+            try {
+                state.loadingStatus = `正在使用${API_CONFIGS[state.currentAPI].name}为您生成风趣的单词讲解...`;
+                render();
+                const data = await fetchWordAnalysisAndQuiz(word);
+                
+                state.currentWordData = data;
+                state.currentStep = 0;
+                state.score = 0;
+                state.gameState = 'playing';
+            } catch (err) {
+                renderError(err.message);
+                state.gameState = 'welcome';
+            } finally {
+                state.isLoading = false;
+                render();
+            }
+        };
+
+        const handleSelectOption = (selectedOption) => {
+            const step = state.currentWordData.steps[state.currentStep];
+            
+            console.log('选项选择调试信息:', {
+                selectedOption,
+                correctAnswer: step.correctAnswer,
+                correctIndex: step.correctIndex,
+                options: step.options,
+                stepTitle: step.title
+            });
+            
+            const isCorrect = selectedOption === step.correctAnswer;
+            
+            if (isCorrect) {
+                state.score++;
+            }
+
+            document.querySelectorAll('.quiz-option').forEach(button => {
+                button.disabled = true;
+                const option = button.dataset.option;
+                const feedbackIcon = button.querySelector('.feedback-icon');
+
+                console.log('处理按钮:', { option, correctAnswer: step.correctAnswer, match: option === step.correctAnswer });
+
+                if (option === step.correctAnswer) {
+                    button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-green-500/30 border-green-500 text-white";
+                    feedbackIcon.innerHTML = Icons.CheckCircle();
+                    console.log('标记为正确答案:', option);
+                } else if (option === selectedOption) {
+                    button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-red-500/30 border-red-500 text-white";
+                    feedbackIcon.innerHTML = Icons.XCircle();
+                    console.log('标记为错误选择:', option);
+                } else {
+                    button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-slate-800/50 border-slate-700 opacity-80 text-slate-100";
+                    console.log('标记为未选择:', option);
+                }
+            });
+
+            const explanationBox = document.getElementById('explanation-box');
+            explanationBox.classList.remove('hidden');
+            explanationBox.classList.add('animate-fade-in');
+            
+            // 添加打字机效果到解析内容
+            const explanationContent = explanationBox.querySelector('.explanation-content');
+            if (explanationContent) {
+                explanationContent.style.opacity = '0';
+                setTimeout(() => {
+                    explanationContent.style.transition = 'opacity 0.8s ease-in-out';
+                    explanationContent.style.opacity = '1';
+                }, 300);
+            }
+
+            const nextButton = document.getElementById('next-button');
+            nextButton.classList.remove('hidden');
+        };
+
+        const handleNext = () => {
+            if (state.currentStep < state.currentWordData.steps.length - 1) {
+                state.currentStep++;
+                state.gameState = 'playing';
+            } else {
+                state.gameState = 'results';
+            }
+            render();
+        };
+
+        const handleReset = () => {
+            state.gameState = 'welcome';
+            state.currentWordData = null;
+            state.error = null;
+            state.score = 0;
+            state.currentStep = 0;
+            render();
+        };
+
+        // --- 事件委托 ---
+        document.body.addEventListener('click', (e) => {
+            // 涟漪效果（委托）
+            const rippleTarget = e.target.closest('.ripple-container');
+            if (rippleTarget) {
+                const rect = rippleTarget.getBoundingClientRect();
+                const ripple = document.createElement('span');
+                const size = Math.max(rect.width, rect.height);
+                ripple.className = 'ripple';
+                ripple.style.width = ripple.style.height = size + 'px';
+                ripple.style.left = (e.clientX - rect.left - size / 2) + 'px';
+                ripple.style.top = (e.clientY - rect.top - size / 2) + 'px';
+                rippleTarget.appendChild(ripple);
+                ripple.addEventListener('animationend', () => ripple.remove());
+            }
+            if (e.target.closest('#reset-button')) {
+                handleReset();
+            }
+            if (e.target.closest('#next-button')) {
+                handleNext();
+            }
+            if (e.target.closest('.quiz-option')) {
+                const button = e.target.closest('.quiz-option');
+                if (!button.disabled) {
+                    handleSelectOption(button.dataset.option);
+                }
+            }
+            // 热门词条 chip 点击
+            if (e.target.closest('.chip-button')) {
+                const chip = e.target.closest('.chip-button');
+                const input = document.getElementById('word-input');
+                if (input) {
+                    input.value = chip.getAttribute('data-chip-value') || '';
+                    input.focus();
+                }
+            }
+            // API选择器点击
+            if (e.target.closest('.api-selector')) {
+                const selector = e.target.closest('.api-selector');
+                const apiName = selector.getAttribute('data-api');
+                if (apiName && API_CONFIGS[apiName]) {
+                    state.currentAPI = apiName;
+                    // 更新按钮状态
+                    document.querySelectorAll('.api-selector').forEach(btn => {
+                        btn.classList.remove('active');
+                    });
+                    selector.classList.add('active');
+                    console.log(`切换到API: ${API_CONFIGS[apiName].name}`);
+                    
+                    // 如果配置界面是打开的，更新显示的配置
+                    const configDiv = document.getElementById('api-config');
+                    if (configDiv && configDiv.style.display === 'block') {
+                        const urlInput = document.getElementById('api-url');
+                        const keyInput = document.getElementById('api-key');
+                        const modelInput = document.getElementById('api-model');
+                        const config = API_CONFIGS[apiName];
+                        if (urlInput) urlInput.value = config.url;
+                        if (keyInput) keyInput.value = config.key;
+                        if (modelInput) modelInput.value = config.model;
+                    }
+                    
+                    // 更新状态提示
+                    const statusHint = document.getElementById('api-status-hint');
+                    if (statusHint) {
+                        const config = API_CONFIGS[apiName];
+                        const needsKey = !config.key && apiName !== 'gemini';
+                        statusHint.textContent = `当前: ${config.name}${needsKey ? ' (需要配置API Key)' : ''}`;
+                    }
+                }
+            }
+            
+            // API配置相关按钮
+            if (e.target.id === 'config-button') {
+                const configDiv = document.getElementById('api-config');
+                const urlInput = document.getElementById('api-url');
+                const keyInput = document.getElementById('api-key');
+                const modelInput = document.getElementById('api-model');
+                const configButton = document.getElementById('config-button');
+                
+                // 切换显示状态
+                if (configDiv.style.display === 'none' || configDiv.style.display === '') {
+                    configDiv.style.display = 'block';
+                    configButton.textContent = '⚙️ 收起配置';
+                    
+                    // 填入当前值
+                    const config = API_CONFIGS[state.currentAPI];
+                    urlInput.value = config.url;
+                    keyInput.value = config.key;
+                    modelInput.value = config.model;
+                } else {
+                    configDiv.style.display = 'none';
+                    configButton.textContent = '⚙️ 配置API';
+                }
+            }
+            
+            if (e.target.id === 'save-config') {
+                const urlInput = document.getElementById('api-url');
+                const keyInput = document.getElementById('api-key');
+                const modelInput = document.getElementById('api-model');
+                const config = API_CONFIGS[state.currentAPI];
+                
+                // 保存配置
+                config.url = urlInput.value || config.defaultUrl;
+                config.key = keyInput.value;
+                config.model = modelInput.value || config.defaultModel;
+                
+                // 更新headers
+                if (!config.urlKeyParam && config.key) {
+                    config.headers['Authorization'] = `Bearer ${config.key}`;
+                }
+                
+                console.log(`已保存${config.name}配置: 模型=${config.model}`);
+                document.getElementById('api-config').style.display = 'none';
+                document.getElementById('config-button').textContent = '⚙️ 配置API';
+            }
+            
+            if (e.target.id === 'reset-config') {
+                const config = API_CONFIGS[state.currentAPI];
+                config.url = config.defaultUrl;
+                config.key = '';
+                config.model = config.defaultModel;
+                
+                const urlInput = document.getElementById('api-url');
+                const keyInput = document.getElementById('api-key');
+                const modelInput = document.getElementById('api-model');
+                urlInput.value = config.url;
+                keyInput.value = config.key;
+                modelInput.value = config.model;
+                
+                console.log(`已重置${config.name}配置`);
+            }
+            
+            if (e.target.id === 'close-config') {
+                document.getElementById('api-config').style.display = 'none';
+                document.getElementById('config-button').textContent = '⚙️ 配置API';
+            }
+        });
+
+        document.body.addEventListener('submit', (e) => {
+            if (e.target.id === 'start-form') {
+                e.preventDefault();
+                const wordInput = document.getElementById('word-input');
+                handleStart(wordInput.value.trim().toLowerCase());
+            }
+        });
+
+        // --- 初始渲染 ---
+        render();
+    </script>
+</body>
+</html>
+
