@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport 视口 " content="width 宽度 =device-width, initial-scale 初始比例  初始比例 =1.0">
     <title>AI 单词记忆道场</title>
     <!-- 引入 Tailwind CSS 以实现快速样式布局 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -11,7 +11,7 @@
             theme: {
                 extend: {
                     fontFamily: {
-                        'brand': ['Noto Serif SC', 'serif'],
+                        'brand 品牌 ': ['Noto Serif SC', 'serif 衬线 '],
                     }
                 }
             }
@@ -25,11 +25,11 @@
         /* 自定义全局样式和动画 */
         body { 
             font-family: 'Inter', sans-serif; 
-            overflow: hidden; /* 防止背景模糊元素导致滚动条出现 */
+            overflow: hidden; /* 防止 防止 背景 背景 模糊 模糊 元素 元素 导致 導致 滚动条 滾動條  滾動條 出现 出現  */
         }
         /* 加载条动画 */
         .animate-loading-bar { 
-            animation: loading-bar-animation 2s linear infinite; 
+            animation 动画 : loading-bar-animation 加载条动画  2s linear infinite; 
         }
         @keyframes loading-bar-animation { 
             0% { transform: translateX(-100%); } 
@@ -959,7 +959,7 @@
                 
                 return quizData;
             } catch (error) {
-                console.error("Error generating quiz:", error);
+                console.error("Error generating 生成  quiz 测验 :", error);
                 throw new Error("根据讲解生成问答关卡失败，请重试。");
             }
         };
@@ -971,8 +971,8 @@
                 url: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent',
                 defaultUrl: 'https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash-exp:generateContent',
                 key: 'AIzaSyCAAQ6v3TYSiiAHZE1FwsuxeARTFBRsboo',
-                model: 'gemini-2.0-flash-exp',
-                defaultModel: 'gemini-2.0-flash-exp',
+                model: 'gemini-2.0-flash-exp 双子座-2.0-闪光-实验 ',
+                defaultModel: 'gemini-2.0-flash-exp 双子座-2.0-闪光-实验 ',
                 headers: { 'Content-Type': 'application/json' },
                 formatPayload: (prompt) => ({
                     contents: [{ role: "user", parts: [{ text: prompt }] }]
@@ -982,8 +982,8 @@
             },
             openai: {
                 name: 'OpenAI',
-                url: 'https://api.openai.com/v1/chat/completions',
-                defaultUrl: 'https://api.openai.com/v1/chat/completions',
+                url: 'https://api.openai.com/v1/chat/completions 完成 ',
+                defaultUrl: 'https://api.openai.com/v1/chat/completions 完成 ',
                 key: '',
                 model: 'gpt-4o',
                 defaultModel: 'gpt-4o',
@@ -1001,9 +1001,9 @@
             },
             deepseek: {
                 name: 'DeepSeek',
-                url: 'https://api.deepseek.com/v1/chat/completions',
-                defaultUrl: 'https://api.deepseek.com/v1/chat/completions',
-                key: '',
+                url: 'https://api.deepseek.com/v1/chat/completions 完成 ',
+                defaultUrl: 'https://api.deepseek.com/v1/chat/completions 完成 ',
+                key: 'sk-e96972f480cc49a9a6515cbee896682c',
                 model: 'deepseek-chat',
                 defaultModel: 'deepseek-chat',
                 headers: { 
@@ -1022,7 +1022,7 @@
 
         // --- 状态管理 ---
         let state = {
-            gameState: 'welcome', // 'welcome', 'loading', 'playing', 'results'
+            gameState: 'welcome', // 'welcome 欢迎 ', 'loading 加载中 ', 'playing 播放 ', 'results 结果 '
             loadingStatus: '',
             currentWordData: null,
             currentStep: 0,
