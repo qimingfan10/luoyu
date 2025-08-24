@@ -2,7 +2,7 @@
 <html lang="zh-CN">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>AI 单词记忆道场</title>
     <!-- 引入 Tailwind CSS 以实现快速样式布局 -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -23,9 +23,59 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Noto+Serif+SC:wght@400;600;700;900&display=swap" rel="stylesheet">
     <style>
         /* 自定义全局样式和动画 */
-        body { 
-            font-family: 'Inter', sans-serif; 
-            overflow: hidden; /* 防止背景模糊元素导致滚动条出现 */
+        body {
+            font-family: 'Inter', sans-serif;
+            overflow-x: hidden; /* 只防止水平滚动，允许垂直滚动 */
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            text-rendering: optimizeLegibility;
+        }
+        
+        /* 移动端优化 */
+        @media (max-width: 768px) {
+            body {
+                font-size: 14px; /* 移动端基础字体大小 */
+            }
+            
+            .max-w-3xl {
+                max-width: 100% !important;
+            }
+            
+            #content-root {
+                padding: 0.5rem;
+            }
+            
+            .glass-card {
+                margin: 0.5rem;
+                padding: 1rem !important;
+            }
+            
+            .text-3xl {
+                font-size: 1.5rem !important;
+            }
+            
+            .text-lg {
+                font-size: 1rem !important;
+            }
+            
+            .p-8 {
+                padding: 1rem !important;
+            }
+            
+            .h-\[550px\] {
+                height: auto !important;
+                min-height: 400px;
+            }
+        }
+        
+        /* 移动端安全区域适配 */
+        @supports (padding: max(0px)) {
+            .safe-area-padding {
+                padding-left: max(16px, env(safe-area-inset-left));
+                padding-right: max(16px, env(safe-area-inset-right));
+                padding-top: max(16px, env(safe-area-inset-top));
+                padding-bottom: max(16px, env(safe-area-inset-bottom));
+            }
         }
         /* 加载条动画 */
         .animate-loading-bar { 
@@ -207,6 +257,60 @@
             color: #fff;
             box-shadow: 0 0 10px rgba(99,102,241,0.3);
         }
+        
+        /* 移动端触摸优化 */
+        * {
+            -webkit-tap-highlight-color: transparent;
+        }
+        
+        button, .quiz-option, .chip-button, .api-selector {
+            min-height: 44px; /* iOS最小触摸目标尺寸 */
+            touch-action: manipulation;
+            transition: all 0.2s ease;
+            will-change: transform;
+        }
+        
+        button:active, .quiz-option:active, .chip-button:active {
+            transform: scale(0.98);
+        }
+        
+        /* 移动端特定样式优化 */
+        @media (max-width: 768px) {
+            /* 提升触摸目标尺寸 */
+            button, .quiz-option {
+                min-height: 48px;
+                font-size: 16px;
+            }
+            
+            /* 防止iOS输入框缩放 */
+            input[type="text"], input[type="password"] {
+                font-size: 16px;
+            }
+            
+            /* 优化API配置面板 */
+            #api-config {
+                margin: 0.5rem;
+                padding: 0.75rem;
+            }
+            
+            /* 优化按钮组布局 */
+            .grid-cols-3 {
+                grid-template-columns: 1fr !important;
+                gap: 0.5rem;
+            }
+            
+            /* 优化模态框和弹出内容 */
+            .glass-card {
+                border-radius: 12px;
+                margin: 0.5rem;
+            }
+            
+            /* 滚动性能优化 */
+            .custom-scroll {
+                -webkit-overflow-scrolling: touch;
+            }
+        }
+        
         /* 减少动态偏好处理 */
         @media (prefers-reduced-motion: reduce) {
             .animate-loading-bar, .animate-fade-in, .animate-pulse {
@@ -352,8 +456,58 @@
             return config.parseResponse(data);
         };
 
+        const ProgressTracker = {
+            intervalId: null,
+            soothingMessages: [
+                "AI正在奋笔疾书，马上就好...",
+                "正在遍历知识的海洋，请稍候...",
+                "魔法正在发生，请勿打扰...",
+                "一个好点子正在酝酿中...",
+                "AI老师正在为您定制专属课程...",
+                "马上为您呈现精彩内容！"
+            ],
+
+            start() {
+                this.stop();
+                state.progressPercent = 0;
+                let messageIndex = 0;
+                
+                this.intervalId = setInterval(() => {
+                    // Update message
+                    state.loadingStatus = this.soothingMessages[messageIndex];
+                    messageIndex = (messageIndex + 1) % this.soothingMessages.length;
+
+                    // Slowly increase progress
+                    if (state.progressPercent < 95) {
+                        state.progressPercent += 1;
+                    }
+                    render();
+                }, 1000);
+            },
+
+            setProgress(percent) {
+                this.stop();
+                state.progressPercent = percent;
+                 if (percent < 100) {
+                    this.start();
+                    state.loadingStatus = this.soothingMessages[Math.floor(Math.random() * this.soothingMessages.length)];
+                } else {
+                     state.loadingStatus = "✅ 完成！";
+                }
+                render();
+            },
+
+            stop() {
+                if (this.intervalId) {
+                    clearInterval(this.intervalId);
+                    this.intervalId = null;
+                }
+            }
+        };
+
         const fetchWordAnalysisAndQuiz = async (word) => {
             console.log(`Starting analysis for: ${word} using ${API_CONFIGS[state.currentAPI].name}`);
+            ProgressTracker.setProgress(10);
             
             // 第一步: 生成单词的详细讲解
             const analysisPrompt = `
@@ -432,6 +586,7 @@
 
             let analysisText;
             try {
+                ProgressTracker.setProgress(60);
                 analysisText = await callAPI(analysisPrompt, state.currentAPI);
                 console.log("Analysis generated successfully.");
             } catch (error) {
@@ -557,11 +712,13 @@
                 // 根据不同API处理JSON响应
                 if (state.currentAPI === 'gemini') {
                     // Gemini使用JSON模式
+                    ProgressTracker.setProgress(90);
                     const quizJsonText = await callAPI(quizPrompt, 'gemini', true);
                     quizData = JSON.parse(quizJsonText);
                 } else {
                     // 对于其他API，需要在prompt中要求JSON格式
                     const jsonQuizPrompt = quizPrompt + '\n\n请严格按照JSON格式输出，不要包含任何其他文字或解释。确保包含完整的steps数组。';
+                    ProgressTracker.setProgress(90);
                     let quizJsonText = await callAPI(jsonQuizPrompt, state.currentAPI);
                     
                     console.log(`${state.currentAPI} 原始响应:`, quizJsonText);
@@ -957,6 +1114,9 @@
                     imageErrorMessage: imageErrorMessage
                 };
                 
+                ProgressTracker.stop();
+                state.progressPercent = 100;
+                render();
                 return quizData;
             } catch (error) {
                 console.error("Error generating quiz:", error);
@@ -1003,7 +1163,7 @@
                 name: 'DeepSeek',
                 url: 'https://api.deepseek.com/v1/chat/completions',
                 defaultUrl: 'https://api.deepseek.com/v1/chat/completions',
-                key: '',
+                key: 'sk-adcf701a88be4889a6d90b7d5a598937',
                 model: 'deepseek-chat',
                 defaultModel: 'deepseek-chat',
                 headers: { 
@@ -1029,7 +1189,10 @@
             score: 0,
             error: null,
             isLoading: false,
-            currentAPI: 'gemini' // 默认使用Gemini
+            currentAPI: 'gemini', // 默认使用Gemini
+            progressPercent: 0,
+            currentLoadingStep: '',
+            estimatedTime: ''
         };
 
         // --- UI 渲染函数 ---
@@ -1038,10 +1201,10 @@
         const renderWelcomeScreen = () => {
             const isLoading = state.isLoading;
             return `
-                <div class="text-center p-8 max-w-2xl mx-auto animate-fade-in">
+                <div class="text-center p-4 sm:p-8 max-w-2xl mx-auto animate-fade-in">
                     ${Icons.Bot({ size: 64, className: "mx-auto text-indigo-300 mb-4 animate-bounce" })}
                     <h1 class="text-3xl md:text-4xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">欢迎来到《单词疯人院》</h1>
-                    <p class="text-lg text-slate-300/90 mb-8">把任何单词砸向我，AI老师为你即兴开课！</p>
+                    <p class="text-lg text-slate-300/90 mb-6 sm:mb-8">把任何单词砸向我，AI老师为你即兴开课！</p>
                     <form id="start-form" class="flex flex-col sm:flex-row gap-4 justify-center items-center">
                         <div class="relative w-full max-w-sm">
                             <input type="text" id="word-input" placeholder="输入任意单词开始闯关！" class="glass-input w-full pl-4 pr-12 py-3 rounded-lg text-white placeholder-slate-400 focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900 transition-all duration-300" ${isLoading ? 'disabled' : ''}>
@@ -1112,10 +1275,32 @@
             <div class="text-center p-8 max-w-2xl mx-auto text-white animate-fade-in">
                 ${Icons.Sparkles({ size: 64, className: "mx-auto text-indigo-300 mb-4 animate-pulse" })}
                 <h2 class="text-3xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">AI老师正在火力全开！</h2>
-                <p class="text-slate-300/90 text-lg">${state.loadingStatus}</p>
-                <div class="w-full bg-slate-700/60 rounded-full h-2.5 mt-8 overflow-hidden border border-slate-700/60">
-                    <div class="progress-gradient h-2.5 rounded-full w-full animate-loading-bar"></div>
+                <p class="text-slate-300/90 text-lg mb-4">${state.loadingStatus}</p>
+                
+                <!-- 详细进度显示 -->
+                <div class="mb-4">
+                    <div class="flex justify-between text-sm text-slate-400 mb-2">
+                        <span>生成进度</span>
+                        <span id="progress-percent">${state.progressPercent}%</span>
+                    </div>
+                    <div class="w-full bg-slate-700/60 rounded-full h-3 overflow-hidden border border-slate-700/60 relative">
+                        <div id="progress-bar" class="progress-gradient h-full rounded-full transition-all duration-500" style="width: ${state.progressPercent}%"></div>
+                        ${state.progressPercent === 0 ? '<div class="progress-gradient h-full rounded-full w-full animate-loading-bar absolute top-0"></div>' : ''}
+                    </div>
                 </div>
+                
+                <!-- 当前步骤显示 -->
+                ${state.currentStep ? `
+                    <div class="mt-6 p-4 bg-slate-800/50 rounded-lg border border-indigo-500/20">
+                        <div class="flex items-center justify-center gap-2 mb-2">
+                            ${Icons.LoaderCircle({ className: "animate-spin h-5 w-5 text-indigo-400" })}
+                            <span class="text-indigo-300 font-medium">${state.currentStep}</span>
+                        </div>
+                        <div class="text-xs text-slate-500">
+                            预计剩余时间：${state.estimatedTime || '正在计算...'}
+                        </div>
+                    </div>
+                ` : ''}
             </div>
         `;
         
@@ -1157,12 +1342,12 @@
             return `
                 <div class="relative">
                     <div class="confetti-container" id="confetti-root"></div>
-                    <div class="text-center p-6 max-w-2xl mx-auto glass-card rounded-2xl animate-fade-in">
+                    <div class="text-center p-4 sm:p-6 max-w-2xl mx-auto glass-card rounded-2xl animate-fade-in">
                     ${Icons.Trophy({ className: "mx-auto text-yellow-400 mb-4" })}
-                        <h1 class="text-4xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">闯关成功！</h1>
-                    <p class="text-2xl text-slate-300 mb-6">你的得分: <span class="font-bold text-green-400">${score} / ${total}</span></p>
-                    <div class="mb-6">
-                        <p class="text-slate-400 mb-4">这是为你专属打造的"单词画像"奖励！</p>
+                        <h1 class="text-3xl sm:text-4xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">闯关成功！</h1>
+                    <p class="text-xl sm:text-2xl text-slate-300 mb-4 sm:mb-6">你的得分: <span class="font-bold text-green-400">${score} / ${total}</span></p>
+                    <div class="mb-4 sm:mb-6">
+                        <p class="text-slate-400 mb-3">这是为你专属打造的"单词画像"奖励！</p>
                         <div id="result-image-container" class="w-full max-w-md mx-auto aspect-square bg-slate-900/50 rounded-lg flex items-center justify-center border border-slate-700/70 relative overflow-hidden">
                             ${imageGenerationFailed ? 
                                 `<div class="w-full h-full flex items-center justify-center bg-orange-500/20 border border-orange-400 rounded-lg">
@@ -1195,14 +1380,14 @@
             const progress = ((currentStep + 1) / currentWordData.steps.length) * 100;
             
             return `
-                <div class="flex flex-col gap-8 w-full animate-fade-in">
+                <div class="flex flex-col gap-4 sm:gap-8 w-full animate-fade-in">
                     <div class="flex items-center gap-4">
                         <div class="w-full bg-slate-700 rounded-full h-2.5">
                             <div class="progress-gradient h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
                         </div>
-                        <div class="text-white font-bold text-lg">${score} / ${currentWordData.steps.length}</div>
+                        <div class="text-white font-bold text-sm sm:text-lg">${score} / ${currentWordData.steps.length}</div>
                     </div>
-                    <div id="quiz-card-container" class="relative h-[550px]">
+                    <div id="quiz-card-container" class="relative h-auto sm:h-[550px] flex-grow">
                         ${renderQuizCard(step)}
                     </div>
                 </div>
@@ -1303,6 +1488,19 @@
                     break;
                 case 'loading':
                     contentRoot.innerHTML = renderLoadingScreen();
+                    // 更新进度条
+                    if (state.progressPercent !== undefined) {
+                        setTimeout(() => {
+                            const progressBar = document.getElementById('progress-bar');
+                            const progressPercent = document.getElementById('progress-percent');
+                            if (progressBar) {
+                                progressBar.style.width = state.progressPercent + '%';
+                            }
+                            if (progressPercent) {
+                                progressPercent.textContent = state.progressPercent + '%';
+                            }
+                        }, 100);
+                    }
                     break;
                 case 'playing':
                     contentRoot.innerHTML = renderPlayingScreen();
@@ -1339,11 +1537,9 @@
             }
             state.isLoading = true;
             state.gameState = 'loading';
-            render();
+            ProgressTracker.start();
 
             try {
-                state.loadingStatus = `正在使用${API_CONFIGS[state.currentAPI].name}为您生成风趣的单词讲解...`;
-                render();
                 const data = await fetchWordAnalysisAndQuiz(word);
                 
                 state.currentWordData = data;
