@@ -382,6 +382,7 @@
                             question: { type: "string" },
                             options: { type: "array", items: { type: "string" } },
                             correctAnswer: { type: "string" },
+                            correctIndex: { type: "number" },
                             explanation: { type: "string" }
                         },
                         required: ["title", "question", "options", "correctAnswer", "explanation"]
@@ -664,8 +665,9 @@
               【重要规则】:
               1. 对于每个部分的 "explanation" 字段，你必须【一字不差地】使用【原始讲解内容】中对应部分的【完整原文】作为其值，不要进行任何形式的总结、缩写或改写。原始讲解内容在下面提供。
               2. 必须包含完整的steps数组，包含所有9个部分的问答。
-              3. 不要在JSON前后添加任何解释文字或代码块标记。
-              4. 确保JSON格式完全有效，所有字符串都用双引号包围。
+              3. 每个步骤必须包含 correctIndex 字段，表示正确答案在 options 数组中的索引（0-3）。
+              4. 不要在JSON前后添加任何解释文字或代码块标记。
+              5. 确保JSON格式完全有效，所有字符串都用双引号包围。
               
               原始讲解内容（用于填充explanation字段）:
               ---
@@ -1008,44 +1010,58 @@
                         console.warn(`步骤 ${index} 缺少title字段，已修复为: ${step.title}`);
                     }
                     
-                    // 修复correctAnswer字段
+                    // 确保有 correctIndex 字段
+                    if (step.correctIndex === undefined && step.correctAnswer && step.options) {
+                        // 尝试从 correctAnswer 推断 correctIndex
+                        const normalizeString = (str) => (str || '').trim().toLowerCase().replace(/[^\w\s]|_/g, "").replace(/\s+/g, " ");
+                        const normalizedCorrect = normalizeString(step.correctAnswer);
+                        
+                        let foundIndex = -1;
+                        step.options.forEach((option, idx) => {
+                            if (normalizeString(option) === normalizedCorrect) {
+                                foundIndex = idx;
+                            }
+                        });
+                        
+                        if (foundIndex !== -1) {
+                            step.correctIndex = foundIndex;
+                            console.log(`步骤 ${index} 从correctAnswer推断correctIndex: ${foundIndex}`);
+                        } else {
+                            // 如果找不到匹配的，默认设为0
+                            step.correctIndex = 0;
+                            step.correctAnswer = step.options[0];
+                            console.warn(`步骤 ${index} 无法推断correctIndex，默认设为0`);
+                        }
+                    }
+                    
+                    // 修复correctAnswer字段（基于correctIndex）
                     if (!step.correctAnswer && step.correctIndex !== undefined && step.options) {
                         if (step.correctIndex >= 0 && step.correctIndex < step.options.length) {
                             step.correctAnswer = step.options[step.correctIndex];
                             console.log(`步骤 ${index} 从correctIndex(${step.correctIndex})修复correctAnswer: "${step.correctAnswer}"`);
                         } else {
                             console.error(`步骤 ${index} correctIndex(${step.correctIndex})超出选项范围(${step.options.length})`);
+                            // 修复超出范围的索引
+                            step.correctIndex = 0;
+                            step.correctAnswer = step.options[0];
                         }
                     }
                     
-                    // 验证correctAnswer是否在选项中
-                    if (step.correctAnswer && step.options) {
-                        const answerExists = step.options.some(option => option === step.correctAnswer);
-                        if (!answerExists) {
-                            console.warn(`步骤 ${index} correctAnswer "${step.correctAnswer}" 不在选项中，尝试修复...`);
-                            // 尝试找到最相似的选项
-                            let bestMatch = step.options[0];
-                            let bestScore = 0;
-                            
-                            step.options.forEach(option => {
-                                // 简单的相似度检测
-                                const similarity = option.toLowerCase().includes(step.correctAnswer.toLowerCase()) || 
-                                                 step.correctAnswer.toLowerCase().includes(option.toLowerCase());
-                                if (similarity) {
-                                    bestMatch = option;
-                                    bestScore = 1;
-                                }
-                            });
-                            
-                            step.correctAnswer = bestMatch;
-                            console.log(`步骤 ${index} 修复correctAnswer为: "${step.correctAnswer}"`);
+                    // 验证 correctIndex 的有效性
+                    if (step.correctIndex !== undefined && step.options) {
+                        if (step.correctIndex < 0 || step.correctIndex >= step.options.length) {
+                            console.warn(`步骤 ${index} correctIndex(${step.correctIndex})无效，修复为0`);
+                            step.correctIndex = 0;
                         }
+                        // 同步 correctAnswer
+                        step.correctAnswer = step.options[step.correctIndex];
                     }
                     
-                    // 如果仍然没有correctAnswer，使用第一个选项
-                    if (!step.correctAnswer && step.options && step.options.length > 0) {
+                    // 如果仍然没有 correctIndex，设为0
+                    if (step.correctIndex === undefined && step.options && step.options.length > 0) {
+                        step.correctIndex = 0;
                         step.correctAnswer = step.options[0];
-                        console.warn(`步骤 ${index} 没有正确答案，默认使用第一个选项: "${step.correctAnswer}"`);
+                        console.warn(`步骤 ${index} 没有correctIndex，默认设为0`);
                     }
                     
                     // 最终验证
@@ -1458,7 +1474,7 @@
 
         const renderQuizCard = (step) => {
             const optionsHtml = step.options.map((option, index) => `
-                <button data-option="${option}" class="quiz-option ripple-container w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border bg-slate-700/60 border-slate-600 hover:bg-slate-600/80 hover:border-indigo-400/70 text-slate-100 focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900">
+                <button data-option="${option}" data-index="${index}" class="quiz-option ripple-container w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border bg-slate-700/60 border-slate-600 hover:bg-slate-600/80 hover:border-indigo-400/70 text-slate-100 focus:outline-none focus-visible:ring-2 ring-indigo-400 ring-offset-2 ring-offset-slate-900">
                     <span>${option}</span>
                     <span class="feedback-icon"></span>
                 </button>
@@ -1576,36 +1592,39 @@
             }
         };
 
-        const handleSelectOption = (selectedOption) => {
+        const handleSelectOption = (selectedIndex) => {
             const step = state.currentWordData.steps[state.currentStep];
             
             console.log('选项选择调试信息:', {
-                selectedOption,
+                selectedIndex,
+                correctIndex: step.correctIndex,
                 correctAnswer: step.correctAnswer,
                 options: step.options,
                 stepTitle: step.title
             });
             
-            const isCorrect = selectedOption === step.correctAnswer;
+            // 基于索引比较，更加可靠
+            const isCorrect = selectedIndex === step.correctIndex;
+            
+            console.log(`索引比较: ${selectedIndex} === ${step.correctIndex} = ${isCorrect}`);
             
             if (isCorrect) {
                 state.score++;
             }
 
-            document.querySelectorAll('.quiz-option').forEach(button => {
+            document.querySelectorAll('.quiz-option').forEach((button, buttonIndex) => {
                 button.disabled = true;
-                const option = button.dataset.option;
                 const feedbackIcon = button.querySelector('.feedback-icon');
 
                 button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-slate-800/50 border-slate-700 opacity-80 text-slate-100";
 
-                if (option === step.correctAnswer) {
+                if (buttonIndex === step.correctIndex) {
                     // 总是高亮正确答案
                     button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-green-500/30 border-green-500 text-white";
                     feedbackIcon.innerHTML = Icons.CheckCircle();
                 }
                 
-                if (option === selectedOption && !isCorrect) {
+                if (buttonIndex === selectedIndex && !isCorrect) {
                     // 如果用户选错了，高亮这个错误选项
                     button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-red-500/30 border-red-500 text-white";
                     feedbackIcon.innerHTML = Icons.XCircle();
@@ -1672,7 +1691,8 @@
             if (e.target.closest('.quiz-option')) {
                 const button = e.target.closest('.quiz-option');
                 if (!button.disabled) {
-                    handleSelectOption(button.dataset.option);
+                    const index = parseInt(button.dataset.index);
+                    handleSelectOption(index);
                 }
             }
             // 热门词条 chip 点击
