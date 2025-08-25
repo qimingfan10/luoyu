@@ -29,6 +29,7 @@
             -webkit-font-smoothing: antialiased;
             -moz-osx-font-smoothing: grayscale;
             text-rendering: optimizeLegibility;
+            position: relative; /* 为绝对定位的背景元素提供定位上下文 */
         }
         
         /* 移动端优化 */
@@ -318,10 +319,9 @@
             }
         }
     </style>
-</head>
-<body class="bg-slate-900">
+<body class="flex flex-col">
     <!-- 主应用容器 -->
-    <main id="app-container" class="min-h-screen w-full flex flex-col items-center justify-center p-4 relative">
+    <main id="app-container" class="bg-slate-900 min-h-screen w-full flex flex-col items-center justify-center p-4 relative overflow-hidden flex-grow">
         <!-- 背景装饰元素 -->
         <div class="bg-grid"></div>
         <div class="bg-mesh"></div>
@@ -332,6 +332,7 @@
         <div id="content-root" class="w-full max-w-3xl mx-auto z-10">
             <!-- 初始加载欢迎页面 -->
         </div>
+    </main>
     </main>
 
     <script type="module">
@@ -370,18 +371,18 @@
 
         // JSON Schema定义
         const quizSchema = {
-            type: "OBJECT",
+            type: "object",
             properties: {
                 steps: {
-                    type: "ARRAY",
+                    type: "array",
                     items: {
-                        type: "OBJECT",
+                        type: "object",
                         properties: {
-                            title: { type: "STRING" },
-                            question: { type: "STRING" },
-                            options: { type: "ARRAY", items: { type: "STRING" } },
-                            correctAnswer: { type: "STRING" },
-                            explanation: { type: "STRING" }
+                            title: { type: "string" },
+                            question: { type: "string" },
+                            options: { type: "array", items: { type: "string" } },
+                            correctAnswer: { type: "string" },
+                            explanation: { type: "string" }
                         },
                         required: ["title", "question", "options", "correctAnswer", "explanation"]
                     }
@@ -390,70 +391,87 @@
         };
 
         // 通用API调用函数
-        const callAPI = async (prompt, apiName = 'gemini', isJsonMode = false) => {
-            const config = API_CONFIGS[apiName];
-            if (!config) throw new Error(`未知的API: ${apiName}`);
-            
-            // 检查是否需要API Key
-            if (!config.key && apiName !== 'gemini') {
-                throw new Error(`${config.name} 需要配置API Key`);
+        const callAPI = async (prompt, preferredApiName, isJsonMode = false) => {
+            const apiQueue = [
+                preferredApiName,
+                ...['gemini', 'openai', 'deepseek'].filter(api => api !== preferredApiName)
+            ];
+
+            let lastError = null;
+
+            for (const apiName of apiQueue) {
+                const config = API_CONFIGS[apiName];
+                if (!config || (!config.key && apiName !== 'gemini')) {
+                    console.log(`跳过API: ${apiName} (未配置)`);
+                    continue;
+                }
+
+                try {
+                    const payload = config.formatPayload(prompt, config.model);
+                    if (isJsonMode && apiName === 'gemini') {
+                        payload.generationConfig = {
+                            responseMimeType: "application/json",
+                            responseSchema: quizSchema
+                        };
+                    }
+
+                    const headers = { ...config.headers };
+                    if (!config.urlKeyParam && config.key) {
+                        headers['Authorization'] = `Bearer ${config.key}`;
+                    }
+
+                    let url = config.url;
+                     if (apiName === 'gemini') {
+                        const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
+                        url = `${baseUrl}${config.model}:generateContent?key=${config.key}`;
+                    } else {
+                        url = config.urlKeyParam ? `${config.url}?key=${config.key}` : config.url;
+                    }
+
+                    console.log(`调用API: ${config.name}, 模型: ${config.model}, URL: ${url}`);
+                    state.loadingStatus = `正在调用 ${config.name}...`;
+                    if (typeof render === 'function') render();
+
+                    const response = await fetch(url, {
+                        method: 'POST',
+                        headers: headers,
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!response.ok) {
+                        const errorText = await response.text();
+                        throw new Error(`${config.name} API Error: ${response.status} - ${errorText.substring(0, 200)}`);
+                    }
+                    
+                    const responseText = await response.text();
+                    console.log(`${config.name} API原始响应:`, responseText.substring(0, 500));
+
+                    if (responseText.trim().startsWith('<!doctype') || responseText.trim().startsWith('<html')) {
+                        throw new Error(`${config.name} 返回了HTML页面，请检查API Key和URL配置`);
+                    }
+
+                    let data;
+                    try {
+                        data = JSON.parse(responseText.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim());
+                    } catch (e) {
+                         throw new Error(`${config.name} 返回了无效的JSON格式: ${e.message}`);
+                    }
+
+                    // 成功，返回结果
+                    console.log(`API ${config.name} 调用成功!`);
+                    return config.parseResponse(data);
+
+                } catch (error) {
+                    console.error(`API ${config.name} 调用失败:`, error.message);
+                    lastError = error;
+                    state.loadingStatus = `${config.name} 调用失败，正在尝试下一个...`;
+                    if (typeof render === 'function') render();
+                }
             }
-            
-            const payload = config.formatPayload(prompt, config.model);
-            if (isJsonMode && apiName === 'gemini') {
-                payload.generationConfig = {
-                    responseMimeType: "application/json",
-                    responseSchema: quizSchema
-                };
-            }
-            
-            // 动态构建headers
-            const headers = { ...config.headers };
-            if (!config.urlKeyParam && config.key) {
-                headers['Authorization'] = `Bearer ${config.key}`;
-            }
-            
-            // 对于Gemini，需要动态构建包含模型名的URL
-            let url = config.url;
-            if (apiName === 'gemini') {
-                // 从URL中提取基础部分并重新构建
-                const baseUrl = 'https://generativelanguage.googleapis.com/v1beta/models/';
-                url = `${baseUrl}${config.model}:generateContent?key=${config.key}`;
-            } else {
-                url = config.urlKeyParam ? `${config.url}?key=${config.key}` : config.url;
-            }
-            
-            console.log(`调用API: ${config.name}, 模型: ${config.model}, URL: ${url}`);
-            
-            const response = await fetch(url, {
-                method: 'POST',
-                headers: headers,
-                body: JSON.stringify(payload)
-            });
-            
-            if (!response.ok) {
-                const errorText = await response.text();
-                console.error(`${config.name} API错误响应:`, errorText);
-                throw new Error(`${config.name} API Error: ${response.status} - ${errorText.substring(0, 200)}`);
-            }
-            
-            const responseText = await response.text();
-            console.log(`${config.name} API原始响应:`, responseText.substring(0, 500));
-            
-            // 检查响应是否是HTML（通常表示API Key或URL错误）
-            if (responseText.trim().startsWith('<!doctype') || responseText.trim().startsWith('<html')) {
-                throw new Error(`${config.name} 返回了HTML页面，请检查API Key和URL配置`);
-            }
-            
-            let data;
-            try {
-                data = JSON.parse(responseText);
-            } catch (e) {
-                console.error(`${config.name} JSON解析失败:`, e.message);
-                throw new Error(`${config.name} 返回了无效的JSON格式: ${e.message}`);
-            }
-            
-            return config.parseResponse(data);
+
+            // 如果所有API都失败了
+            console.error("所有API都调用失败。");
+            throw new Error(`所有API均调用失败。最后一次错误: ${lastError.message}`);
         };
 
         const ProgressTracker = {
@@ -481,7 +499,19 @@
                     if (state.progressPercent < 95) {
                         state.progressPercent += 1;
                     }
-                    render();
+                    // 只更新加载状态文本，避免整个页面重绘导致的闪烁
+                    const loadingStatusElement = document.getElementById('loading-status-text');
+                    if (loadingStatusElement) {
+                        loadingStatusElement.textContent = state.loadingStatus;
+                    }
+                    const progressPercentElement = document.getElementById('progress-percent');
+                    const progressBarElement = document.getElementById('progress-bar');
+                    if(progressPercentElement) {
+                        progressPercentElement.textContent = state.progressPercent + '%';
+                    }
+                    if(progressBarElement) {
+                        progressBarElement.style.width = state.progressPercent + '%';
+                    }
                 }, 1000);
             },
 
@@ -587,45 +617,23 @@
             let analysisText;
             try {
                 ProgressTracker.setProgress(60);
-                analysisText = await callAPI(analysisPrompt, state.currentAPI);
+                analysisText = await callAPI(analysisPrompt, state.currentAPI, false);
                 console.log("Analysis generated successfully.");
             } catch (error) {
                 console.error("Error generating analysis:", error);
-                
-                // 尝试使用备用API (优先使用Gemini作为备用)
-                const availableAPIs = ['gemini', 'openai', 'deepseek'].filter(api => 
-                    api !== state.currentAPI && 
-                    (api === 'gemini' || API_CONFIGS[api].key !== '')
-                );
-                
-                if (availableAPIs.length === 0) {
-                    throw new Error("没有可用的备用API，请配置至少一个API密钥。");
-                }
-                
-                let lastError = error;
-                for (const backupAPI of availableAPIs) {
-                    try {
-                        console.log(`${state.currentAPI} failed, trying ${backupAPI}...`);
-                        state.loadingStatus = `${API_CONFIGS[state.currentAPI].name}失败，正在尝试${API_CONFIGS[backupAPI].name}...`;
-                        // 触发UI更新
-                        if (typeof render === 'function') render();
-                        
-                        analysisText = await callAPI(analysisPrompt, backupAPI);
-                        console.log(`Analysis generated successfully with ${backupAPI}.`);
-                        break;
-                    } catch (backupError) {
-                        console.error(`${backupAPI} also failed:`, backupError);
-                        lastError = backupError;
-                        continue;
-                    }
-                }
-                
-                if (!analysisText) {
-                    throw new Error(`所有可用的API都失败了。最后错误：${lastError.message}`);
-                }
+                // 错误将由 callAPI 内部的重试逻辑处理，或者直接抛出
+                throw error;
             }
 
             // 第二步: 根据讲解生成选择题 (JSON格式)
+            // 创建一个纯净版的分析文本，移除所有markdown和标题，以避免干扰JSON生成
+            const plainAnalysisText = analysisText
+                .replace(/###\s(.*?)\n/g, '') // 移除标题
+                .replace(/\*\*/g, '')         // 移除加粗
+                .replace(/`/g, '')          // 移除代码标记
+                .replace(/---/g, '')         // 移除分隔线
+                .trim();
+
             const quizPrompt = `
               角色: 你是一个聪明的问答游戏设计师。
               任务: 这是关于单词 "${word}" 的一份风趣讲解，内容被分为了几个部分。请为每一个部分都创建一个高质量的四选一选择题，问题需要巧妙地测试用户对该部分核心知识点的理解。
@@ -633,40 +641,14 @@
               【关键要求】每个板块的题目类型必须体现其独特性，避免同质化：
               
               1. "核心速览 (The Gist)" - 考查基本含义理解
-              题型：词义选择、基本用法判断
-              选项风格：简洁的词义解释或用法描述
-              
               2. "外形联想法 (Look & Remember)" - 考查字母联想创意
-              题型：字母形状联想、视觉记忆技巧
-              选项风格：具体的形象描述或联想方法
-              
               3. "用法大师班 (Usage Masterclass)" - 考查语境运用
-              题型：搭配选择、语境判断、细微差别辨析
-              选项风格：具体的使用场景或搭配词组
-              
               4. "日常联想活剧场 (Real-Life Theatre)" - 考查生活场景应用
-              题型：情景选择、成语对应、生活实例
-              选项风格：具体的生活场景或四字成语
-              
               5. "词源侦探局 (Etymology Detective)" - 考查词根词缀知识
-              题型：词根含义、词缀作用、构词逻辑
-              选项风格：词根/词缀的含义或语言学解释
-              
               6. ""双胞胎"辨析室 (Similar Word Clinic)" - 考查词汇辨析
-              题型：形近词区分、易混词对比、记忆技巧
-              选项风格：具体的区分方法或词汇对比
-              
               7. "考研直通车 (Exam Express)" - 考查考试技巧
-              题型：真题场景、考试策略、出题规律
-              选项风格：考试相关的技巧或真题信息
-              
               8. "高分技巧点拨 (Pro-Tips)" - 考查解题方法
-              题型：解题技巧、应试策略、高分要点
-              选项风格：具体的学习方法或应试建议
-              
               9. "字母变形记 (The Grand Finale Scene)" - 考查视觉创意
-              题型：画面描述、艺术构思、创意联想
-              选项风格：具体的视觉元素或艺术描述
               
               互动性与积极情绪风格要求：
               - 题干使用中文，第二人称"你"，语气积极游戏化，可适度加表情符号
@@ -676,29 +658,34 @@
               
               讲解内容如下:
               ---
-              ${analysisText}
+              ${plainAnalysisText}
               ---
               你的输出必须是一个纯粹的JSON对象，严格遵循下面的Schema。
-              【重要规则】: 
-              1. 对于每个部分的 "explanation" 字段，你必须【一字不差地】使用上面讲解内容中对应部分的【完整原文】作为其值，不要进行任何形式的总结、缩写或改写。
+              【重要规则】:
+              1. 对于每个部分的 "explanation" 字段，你必须【一字不差地】使用【原始讲解内容】中对应部分的【完整原文】作为其值，不要进行任何形式的总结、缩写或改写。原始讲解内容在下面提供。
               2. 必须包含完整的steps数组，包含所有9个部分的问答。
               3. 不要在JSON前后添加任何解释文字或代码块标记。
               4. 确保JSON格式完全有效，所有字符串都用双引号包围。
+              
+              原始讲解内容（用于填充explanation字段）:
+              ---
+              ${analysisText}
+              ---
             `;
             
             const quizSchema = {
-                type: "OBJECT",
+                type: "object",
                 properties: {
                     steps: {
-                        type: "ARRAY",
+                        type: "array",
                         items: {
-                            type: "OBJECT",
+                            type: "object",
                             properties: {
-                                title: { type: "STRING" },
-                                question: { type: "STRING" },
-                                options: { type: "ARRAY", items: { type: "STRING" } },
-                                correctAnswer: { type: "STRING" },
-                                explanation: { type: "STRING" }
+                                title: { type: "string" },
+                                question: { type: "string" },
+                                options: { type: "array", items: { type: "string" } },
+                                correctAnswer: { type: "string" },
+                                explanation: { type: "string" }
                             },
                             required: ["title", "question", "options", "correctAnswer", "explanation"]
                         }
@@ -713,13 +700,21 @@
                 if (state.currentAPI === 'gemini') {
                     // Gemini使用JSON模式
                     ProgressTracker.setProgress(90);
-                    const quizJsonText = await callAPI(quizPrompt, 'gemini', true);
+                    // Gemini API在JSON模式下不稳定，优先尝试纯文本模式
+                    const preferredApiForQuiz = state.currentAPI === 'gemini' ? 'gemini' : state.currentAPI;
+                    
+                    // 如果是Gemini，尝试JSON模式，如果失败，callAPI内部会自动用纯文本重试
+                    const isJsonAttempt = state.currentAPI === 'gemini';
+                    
+                    console.log(`尝试生成Quiz，首选API: ${preferredApiForQuiz}, JSON模式: ${isJsonAttempt}`);
+
+                    const quizJsonText = await callAPI(quizPrompt, preferredApiForQuiz, isJsonAttempt);
                     quizData = JSON.parse(quizJsonText);
                 } else {
                     // 对于其他API，需要在prompt中要求JSON格式
                     const jsonQuizPrompt = quizPrompt + '\n\n请严格按照JSON格式输出，不要包含任何其他文字或解释。确保包含完整的steps数组。';
                     ProgressTracker.setProgress(90);
-                    let quizJsonText = await callAPI(jsonQuizPrompt, state.currentAPI);
+                    let quizJsonText = await callAPI(jsonQuizPrompt, state.currentAPI, false);
                     
                     console.log(`${state.currentAPI} 原始响应:`, quizJsonText);
                     
@@ -1084,26 +1079,8 @@
                         const customPrompt = promptMatch[1].trim();
                         const customImageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(customPrompt)}?width=1024&height=1024&seed=100&model=flux&nologo=true`;
                         
-                        // 测试自定义图像URL是否可用
-                        try {
-                            console.log('测试自定义图像URL:', customImageUrl);
-                            const imageResponse = await fetch(customImageUrl, { 
-                                method: 'HEAD',
-                                timeout: 5000 // 5秒超时
-                            });
-                            
-                            if (imageResponse.ok) {
-                                imageUrl = customImageUrl;
-                                console.log('自定义图像URL可用');
-                            } else {
-                                throw new Error(`图像服务返回错误: ${imageResponse.status}`);
-                            }
-                        } catch (imageError) {
-                            console.warn('自定义图像生成失败，使用默认图像:', imageError.message);
-                            imageGenerationFailed = true;
-                            imageErrorMessage = `图像生成失败: ${imageError.message}`;
-                            // 保持使用默认imageUrl
-                        }
+                        imageUrl = customImageUrl;
+                        console.log('使用自定义图像URL:', imageUrl);
                     }
                 }
                 
@@ -1137,7 +1114,16 @@
                 formatPayload: (prompt) => ({
                     contents: [{ role: "user", parts: [{ text: prompt }] }]
                 }),
-                parseResponse: (data) => data.candidates[0].content.parts[0].text,
+                parseResponse: (data) => {
+                    if (data.candidates && data.candidates[0] && data.candidates[0].content && data.candidates[0].content.parts && data.candidates[0].content.parts[0]) {
+                        return data.candidates[0].content.parts[0].text;
+                    }
+                    console.error("Gemini API 返回了空的或无效的内容:", JSON.stringify(data, null, 2));
+                    if (data.candidates && data.candidates[0] && data.candidates[0].finishReason) {
+                        throw new Error(`Gemini API 未返回任何内容，终止原因: ${data.candidates[0].finishReason}`);
+                    }
+                    throw new Error('Gemini API 响应格式不正确，缺少有效内容。');
+                },
                 urlKeyParam: true
             },
             openai: {
@@ -1177,6 +1163,42 @@
                 }),
                 parseResponse: (data) => data.choices[0].message.content,
                 urlKeyParam: false
+            }
+        };
+
+        // --- 持久化函数 ---
+        const saveApiConfigsToLocalStorage = () => {
+            try {
+                const configsToSave = {
+                    openai: { key: API_CONFIGS.openai.key, url: API_CONFIGS.openai.url, model: API_CONFIGS.openai.model },
+                    deepseek: { key: API_CONFIGS.deepseek.key, url: API_CONFIGS.deepseek.url, model: API_CONFIGS.deepseek.model },
+                    gemini: { key: API_CONFIGS.gemini.key, url: API_CONFIGS.gemini.url, model: API_CONFIGS.gemini.model }
+                };
+                localStorage.setItem('apiConfigs', JSON.stringify(configsToSave));
+                console.log('API配置已保存到LocalStorage');
+            } catch (e) {
+                console.error('保存API配置到LocalStorage失败:', e);
+            }
+        };
+
+        const loadApiConfigsFromLocalStorage = () => {
+            try {
+                const savedConfigs = localStorage.getItem('apiConfigs');
+                if (savedConfigs) {
+                    const parsedConfigs = JSON.parse(savedConfigs);
+                    for (const apiName in parsedConfigs) {
+                        if (API_CONFIGS[apiName]) {
+                            Object.assign(API_CONFIGS[apiName], parsedConfigs[apiName]);
+                            // 重新设置header
+                             if (!API_CONFIGS[apiName].urlKeyParam && API_CONFIGS[apiName].key) {
+                                API_CONFIGS[apiName].headers['Authorization'] = `Bearer ${API_CONFIGS[apiName].key}`;
+                            }
+                        }
+                    }
+                    console.log('已从LocalStorage加载API配置');
+                }
+            } catch (e) {
+                console.error('从LocalStorage加载API配置失败:', e);
             }
         };
 
@@ -1275,7 +1297,7 @@
             <div class="text-center p-8 max-w-2xl mx-auto text-white animate-fade-in">
                 ${Icons.Sparkles({ size: 64, className: "mx-auto text-indigo-300 mb-4 animate-pulse" })}
                 <h2 class="text-3xl font-brand bg-gradient-to-r from-indigo-200 via-fuchsia-300 to-cyan-200 bg-clip-text text-transparent mb-2">AI老师正在火力全开！</h2>
-                <p class="text-slate-300/90 text-lg mb-4">${state.loadingStatus}</p>
+                <p id="loading-status-text" class="text-slate-300/90 text-lg mb-4">${state.loadingStatus}</p>
                 
                 <!-- 详细进度显示 -->
                 <div class="mb-4">
@@ -1285,7 +1307,6 @@
                     </div>
                     <div class="w-full bg-slate-700/60 rounded-full h-3 overflow-hidden border border-slate-700/60 relative">
                         <div id="progress-bar" class="progress-gradient h-full rounded-full transition-all duration-500" style="width: ${state.progressPercent}%"></div>
-                        ${state.progressPercent === 0 ? '<div class="progress-gradient h-full rounded-full w-full animate-loading-bar absolute top-0"></div>' : ''}
                     </div>
                 </div>
                 
@@ -1385,9 +1406,9 @@
                         <div class="w-full bg-slate-700 rounded-full h-2.5">
                             <div class="progress-gradient h-2.5 rounded-full transition-all duration-500" style="width: ${progress}%"></div>
                         </div>
-                        <div class="text-white font-bold text-sm sm:text-lg">${score} / ${currentWordData.steps.length}</div>
+                        <div class="text-white font-bold text-sm sm:text-lg flex-shrink-0">${score} / ${currentWordData.steps.length}</div>
                     </div>
-                    <div id="quiz-card-container" class="relative h-auto sm:h-[550px] flex-grow">
+                    <div id="quiz-card-container" class="relative flex-grow">
                         ${renderQuizCard(step)}
                     </div>
                 </div>
@@ -1561,7 +1582,6 @@
             console.log('选项选择调试信息:', {
                 selectedOption,
                 correctAnswer: step.correctAnswer,
-                correctIndex: step.correctIndex,
                 options: step.options,
                 stepTitle: step.title
             });
@@ -1577,19 +1597,18 @@
                 const option = button.dataset.option;
                 const feedbackIcon = button.querySelector('.feedback-icon');
 
-                console.log('处理按钮:', { option, correctAnswer: step.correctAnswer, match: option === step.correctAnswer });
+                button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-slate-800/50 border-slate-700 opacity-80 text-slate-100";
 
                 if (option === step.correctAnswer) {
+                    // 总是高亮正确答案
                     button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-green-500/30 border-green-500 text-white";
                     feedbackIcon.innerHTML = Icons.CheckCircle();
-                    console.log('标记为正确答案:', option);
-                } else if (option === selectedOption) {
+                }
+                
+                if (option === selectedOption && !isCorrect) {
+                    // 如果用户选错了，高亮这个错误选项
                     button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-red-500/30 border-red-500 text-white";
                     feedbackIcon.innerHTML = Icons.XCircle();
-                    console.log('标记为错误选择:', option);
-                } else {
-                    button.className = "quiz-option w-full text-left p-4 rounded-lg transition-all duration-300 flex items-center justify-between border-2 bg-slate-800/50 border-slate-700 opacity-80 text-slate-100";
-                    console.log('标记为未选择:', option);
                 }
             });
 
@@ -1597,7 +1616,6 @@
             explanationBox.classList.remove('hidden');
             explanationBox.classList.add('animate-fade-in');
             
-            // 添加打字机效果到解析内容
             const explanationContent = explanationBox.querySelector('.explanation-content');
             if (explanationContent) {
                 explanationContent.style.opacity = '0';
@@ -1744,6 +1762,7 @@
                 console.log(`已保存${config.name}配置: 模型=${config.model}`);
                 document.getElementById('api-config').style.display = 'none';
                 document.getElementById('config-button').textContent = '⚙️ 配置API';
+                saveApiConfigsToLocalStorage(); // 保存到LocalStorage
             }
             
             if (e.target.id === 'reset-config') {
@@ -1760,6 +1779,7 @@
                 modelInput.value = config.model;
                 
                 console.log(`已重置${config.name}配置`);
+                saveApiConfigsToLocalStorage(); // 同步到LocalStorage
             }
             
             if (e.target.id === 'close-config') {
@@ -1777,6 +1797,7 @@
         });
 
         // --- 初始渲染 ---
+        loadApiConfigsFromLocalStorage(); // 页面加载时读取配置
         render();
     </script>
 </body>
