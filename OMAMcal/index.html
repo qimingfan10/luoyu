@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OMAM Weight Assessment</title>
+    <style>
+        :root {
+            font-family: "Segoe UI", Arial, sans-serif;
+            color: #1a202c;
+            background: #f7fafc;
+        }
+        body {
+            margin: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }
+        main {
+            background: #ffffff;
+            border-radius: 12px;
+            box-shadow: 0 10px 30px rgba(15, 23, 42, 0.1);
+            padding: 32px;
+            width: min(480px, 100% - 40px);
+        }
+        h1 {
+            margin-top: 0;
+            margin-bottom: 12px;
+            font-size: 26px;
+            text-align: center;
+        }
+        p.description {
+            margin-top: 0;
+            margin-bottom: 24px;
+            text-align: center;
+            color: #4a5568;
+            line-height: 1.5;
+        }
+        form {
+            display: grid;
+            gap: 18px;
+        }
+        label {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            font-weight: 600;
+            color: #2d3748;
+        }
+        input, select {
+            padding: 10px 12px;
+            border: 1px solid #cbd5e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.2s ease, box-shadow 0.2s ease;
+        }
+        input:focus, select:focus {
+            border-color: #3182ce;
+            outline: none;
+            box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.35);
+        }
+        button {
+            padding: 12px 16px;
+            border-radius: 8px;
+            border: none;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            background: linear-gradient(135deg, #4299e1, #3182ce);
+            color: white;
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+        button:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px rgba(49, 130, 206, 0.25);
+        }
+        button:active {
+            transform: translateY(0);
+            box-shadow: none;
+        }
+        .result {
+            margin-top: 28px;
+            padding: 20px;
+            border-radius: 10px;
+            background: #ebf8ff;
+            border: 1px solid #bee3f8;
+            color: #2c5282;
+            display: none;
+        }
+        .result h2 {
+            margin: 0 0 12px 0;
+            font-size: 20px;
+        }
+        .result p {
+            margin: 6px 0;
+            line-height: 1.6;
+        }
+        .status {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            font-weight: 700;
+        }
+        .status.ok {
+            color: #2f855a;
+        }
+        .status.warn {
+            color: #c53030;
+        }
+        .hint {
+            font-size: 13px;
+            color: #718096;
+        }
+        @media (max-width: 480px) {
+            main {
+                padding: 24px;
+            }
+            h1 {
+                font-size: 22px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <main>
+        <h1>OMAM Weight Assessment</h1>
+        <p class="description">Provide your sex, age, height (cm), and weight (kg). The calculator applies the OMAM model to estimate expected weight, compute the corrected weight coefficient (Wc), and flag potential overweight risk.</p>
+        <form id="omam-form">
+            <label for="sex">Sex
+                <select id="sex" name="sex" required>
+                    <option value="" disabled selected>Select</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                </select>
+            </label>
+
+            <label for="age">Age (years)
+                <input id="age" name="age" type="number" inputmode="numeric" min="1" max="120" required placeholder="Example: 50" />
+            </label>
+
+            <label for="height">Height (cm)
+                <input id="height" name="height" type="number" inputmode="decimal" min="80" max="220" step="0.1" required placeholder="Example: 170" />
+            </label>
+
+            <label for="weight">Weight (kg)
+                <input id="weight" name="weight" type="number" inputmode="decimal" min="20" max="250" step="0.1" required placeholder="Example: 72" />
+            </label>
+
+            <button type="submit">Calculate</button>
+            <div class="hint">OMAM reference threshold: Wc &gt; 1.1440 indicates overweight.</div>
+        </form>
+
+        <section id="result" class="result" aria-live="polite"></section>
+    </main>
+
+    <script>
+        (function () {
+            const form = document.getElementById('omam-form');
+            const resultBox = document.getElementById('result');
+
+            const COEFFICIENTS = {
+                male: { c: 16.8121, x: 0.0526, y: 2.1659 },
+                female: { c: 16.2729, x: 0.0526, y: 2.1659 }
+            };
+
+            const OVERWEIGHT_THRESHOLD = 1.1440;
+
+            form.addEventListener('submit', (event) => {
+                event.preventDefault();
+                const sex = form.sex.value;
+                const age = Number(form.age.value);
+                const heightCm = Number(form.height.value);
+                const weight = Number(form.weight.value);
+
+                if (!sex || !Number.isFinite(age) || !Number.isFinite(heightCm) || !Number.isFinite(weight)) {
+                    showError('Please provide complete and valid values.');
+                    return;
+                }
+
+                const coeff = COEFFICIENTS[sex];
+                const heightM = heightCm / 100;
+                const predictedWeight = coeff.c * Math.pow(age, coeff.x) * Math.pow(heightM, coeff.y);
+                const wc = weight / predictedWeight;
+                const overweight = wc > OVERWEIGHT_THRESHOLD;
+
+                showResult({ predictedWeight, wc, overweight, sex, age, heightCm, weight });
+            });
+
+            function formatNumber(value, fractionDigits = 2) {
+                return Number.parseFloat(value).toFixed(fractionDigits);
+            }
+
+            function showError(message) {
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `<h2>Notice</h2><p>${message}</p>`;
+            }
+
+            function showResult(data) {
+                const { predictedWeight, wc, overweight, sex, age, heightCm, weight } = data;
+                const statusClass = overweight ? 'warn' : 'ok';
+                const statusText = overweight ? 'Overweight' : 'Not overweight';
+                const sexLabel = sex === 'male' ? 'Male' : 'Female';
+
+                resultBox.style.display = 'block';
+                resultBox.innerHTML = `
+                    <h2>Assessment Result</h2>
+                    <p class="status ${statusClass}">Current assessment: ${statusText}</p>
+                    <p>Expected weight (OMAM model): <strong>${formatNumber(predictedWeight)} kg</strong></p>
+                    <p>Corrected weight coefficient (Wc): <strong>${formatNumber(wc)}</strong></p>
+                    <p>Input summary: ${sexLabel}, ${formatNumber(age, 0)} years old, height ${formatNumber(heightCm, 1)} cm, weight ${formatNumber(weight, 1)} kg</p>
+                    <p>Threshold note: Wc &gt; ${OVERWEIGHT_THRESHOLD} indicates overweight.</p>
+                `;
+            }
+        })();
+    </script>
+</body>
+</html>
